@@ -5,6 +5,7 @@
 #include <bootloader/interface/menus/about.h>
 #include <bootloader/interface/menus/installer.h>
 #include <bootloader/slots/slot.h>
+#include <escher/palette.h>
 
 namespace Bootloader {
   class HomeMenu : public Menu {

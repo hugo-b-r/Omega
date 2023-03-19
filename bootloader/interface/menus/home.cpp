@@ -3,6 +3,7 @@
 #include <bootloader/slots/slot.h>
 #include <bootloader/interface/menus/about.h>
 #include <stdlib.h>
+#include <escher/palette.h>
 
 Bootloader::AboutMenu * Bootloader::HomeMenu::aboutMenu() {
   static AboutMenu * aboutMenu = new AboutMenu();
@@ -14,7 +15,7 @@ Bootloader::InstallerMenu * Bootloader::HomeMenu::installerMenu() {
   return installerMenu;
 }
 
-Bootloader::HomeMenu::HomeMenu() : Menu(KDColorBlack, KDColorWhite, Messages::homeTitle, Messages::mainTitle) {
+Bootloader::HomeMenu::HomeMenu() : Menu(Palette::PrimaryText, Palette::BackgroundHard, Messages::homeTitle, Messages::mainTitle) {
   setup();
 }
 
