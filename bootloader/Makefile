@@ -43,6 +43,8 @@ bootloader_images = $(addprefix bootloader/, \
   computer.png \
 )
 
+bootloader_src += escher/src/palette.cpp
+
 bootloader_src += $(ion_src) $(simple_kandinsky_src) $(liba_src) $(libaxx_src) $(bootloader_images)
 
 $(eval $(call depends_on_image,bootloader/interface/static/interface.cpp,$(bootloader_images)))
