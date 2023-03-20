@@ -1,7 +1,8 @@
 #include "slot_recovery.h"
 #include <ion.h>
+#include <escher/palette.h>
 
-Bootloader::SlotRecoveryMenu::SlotRecoveryMenu(USBData * usb) : Menu(KDColorBlack, KDColorWhite, Messages::recoveryTitle, Messages::mainTitle), m_data(usb) {
+Bootloader::SlotRecoveryMenu::SlotRecoveryMenu(USBData * usb) : Menu(Palette::PrimaryText, Palette::BackgroundHard, Messages::recoveryTitle, Messages::mainTitle), m_data(usb) {
     setup();
 }
 
