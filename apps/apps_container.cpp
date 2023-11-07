@@ -29,7 +29,7 @@ AppsContainer::AppsContainer() :
   m_globalContext(),
   m_variableBoxController(),
   m_examPopUpController(this),
-  m_promptController(k_promptMessages, k_promptColors, k_promptNumberOfMessages),
+  m_promptController(k_promptMessages, k_promptFGColors, k_promptBGColors, k_promptNumberOfMessages),
   m_batteryTimer(),
   m_suspendTimer(),
   m_backlightDimmingTimer(),
@@ -37,7 +37,8 @@ AppsContainer::AppsContainer() :
   m_homeSnapshot(),
   m_onBoardingSnapshot(),
   m_hardwareTestSnapshot(),
-  m_usbConnectedSnapshot()
+  m_usbConnectedSnapshot(),
+  m_startAppSnapshot()
 {
   m_emptyBatteryWindow.setFrame(KDRect(0, 0, Ion::Display::Width, Ion::Display::Height), false);
 // #if __EMSCRIPTEN__
@@ -47,7 +48,7 @@ AppsContainer::AppsContainer() :
    * poincareCircuitBreaker is run. This means either whitelisting all Epsilon
    * (which makes bigger files to download and slower execution), or
    * whitelisting all the symbols (that's a big amount of symbols to find and
-   * quite painy to maintain).
+   * quite paint to maintain).
    * We just remove the circuit breaker for now.
    * TODO: Put the Poincare circuit breaker back on epsilon's web emulator */
 
@@ -58,6 +59,11 @@ AppsContainer::AppsContainer() :
   Poincare::Expression::SetCircuitBreaker(AppsContainer::poincareCircuitBreaker);
 // #endif
   Ion::Storage::sharedStorage()->setDelegate(this);
+
+  addTimer(&m_batteryTimer);
+  addTimer(&m_suspendTimer);
+  addTimer(&m_backlightDimmingTimer);
+  addTimer(&m_clockTimer);
 }
 
 bool AppsContainer::poincareCircuitBreaker() {
@@ -146,8 +152,11 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
        * We do it before switching to USB application to redraw the battery
        * pictogram. */
       updateBatteryState();
-      if (switchTo(usbConnectedAppSnapshot())) {
-        Ion::USB::DFU();
+      if (GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
+        // If we are in exam mode, we don't switch to usb connected app
+        didProcessEvent = true;
+      } else if (switchTo(usbConnectedAppSnapshot())) {
+        Ion::USB::DFU(true);
         // Update LED when exiting DFU mode
         Ion::LED::updateColorWithPlugAndCharge();
         bool switched = switchTo(activeSnapshot);
@@ -220,6 +229,7 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
   return didProcessEvent || alphaLockWantsRedraw;
 }
 
+// List of keys that are used to switch between apps, in order of app to go (eg. 0 : First App, 1 : Second App, 2 : Third App, ...)
 static constexpr Ion::Events::Event switch_events[] = {
     Ion::Events::ShiftSeven, Ion::Events::ShiftEight, Ion::Events::ShiftNine,
     Ion::Events::ShiftFour, Ion::Events::ShiftFive, Ion::Events::ShiftSix,
@@ -231,27 +241,33 @@ bool AppsContainer::processEvent(Ion::Events::Event event) {
   // Warning: if the window is dirtied, you need to call window()->redraw()
   if (event == Ion::Events::USBPlug) {
     if (Ion::USB::isPlugged()) {
+      // If the exam mode is enabled, we ask to disable it, else, we enable USB
       if (GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
         displayExamModePopUp(GlobalPreferences::ExamMode::Off);
         window()->redraw();
       } else {
         Ion::USB::enable();
       }
+      // Update brightness when USB is plugged
       Ion::Backlight::setBrightness(GlobalPreferences::sharedGlobalPreferences()->brightnessLevel());
     } else {
+      // If the USB isn't plugged in USBPlug event, we disable USB
       Ion::USB::disable();
     }
     return true;
   }
+  // If key home or key back is pressed, we switch to the home app.
   if (event == Ion::Events::Home || event == Ion::Events::Back) {
     switchTo(appSnapshotAtIndex(0));
     return true;
   }
+  // If shift + Home are pressed, we switch to the first app.
   if (event == Ion::Events::ShiftHome) {
     switchTo(appSnapshotAtIndex(1));
     return true;
   }
 
+  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
   for(int i = 0; i < std::min((int) (sizeof(switch_events) / sizeof(Ion::Events::Event)), APPS_CONTAINER_SNAPSHOT_COUNT); i++) {
     if (event == switch_events[i]) {
       m_window.redraw(true);
@@ -260,19 +276,44 @@ bool AppsContainer::processEvent(Ion::Events::Event event) {
     }
   }
 
+  // Add EE shortcut to go to the settings (app number 12)
+  if (event == Ion::Events::EE) {
+    switchTo(appSnapshotAtIndex(12));
+    return true;
+  }
+
+  // Add Shift + Ans shortcut to go to the previous app
+  if (event == Ion::Events::ShiftAns) {
+    switchTo(appSnapshotAtIndex(m_lastAppIndex));
+    return true;
+  }
+
+  // If the event is the OnOff key, we suspend the calculator.
   if (event == Ion::Events::OnOff) {
     suspend(true);
     return true;
   }
+  // If the event is a brightness event, we update the brightness according to the event.
   if (event == Ion::Events::BrightnessPlus || event == Ion::Events::BrightnessMinus) {
       int delta = Ion::Backlight::MaxBrightness/GlobalPreferences::NumberOfBrightnessStates;
-      int direction = (event == Ion::Events::BrightnessPlus) ? Ion::Backlight::NumberOfStepsPerShortcut*delta : -delta*Ion::Backlight::NumberOfStepsPerShortcut;
+      int NumberOfStepsPerShortcut = GlobalPreferences::sharedGlobalPreferences()->brightnessShortcut();
+      int direction = (event == Ion::Events::BrightnessPlus) ? NumberOfStepsPerShortcut*delta : -delta*NumberOfStepsPerShortcut;
       GlobalPreferences::sharedGlobalPreferences()->setBrightnessLevel(GlobalPreferences::sharedGlobalPreferences()->brightnessLevel()+direction);
   }
+  // Else, the event was not processed.
   return false;
 }
 
 bool AppsContainer::switchTo(App::Snapshot * snapshot) {
+  // Get app index of the snapshot
+  int m_appIndexToSwitch = appIndexFromSnapshot(snapshot);
+  // If the app is home, skip app index saving
+  if (m_appIndexToSwitch != 0) {
+    // Save last app index
+    m_lastAppIndex = m_currentAppIndex;
+    // Save current app index
+    m_currentAppIndex = m_appIndexToSwitch;
+  }
   if (s_activeApp && snapshot != s_activeApp->snapshot()) {
     resetShiftAlphaStatus();
   }
@@ -309,7 +350,13 @@ void AppsContainer::run() {
     /* Normal execution. The exception checkpoint must be created before
      * switching to the first app, because the first app might create nodes on
      * the pool. */
-    bool switched = switchTo(initialAppSnapshot());
+    bool switched;
+    if (m_startAppSnapshot != nullptr) {
+      switched = switchTo(m_startAppSnapshot);
+    } else {
+      switched = switchTo(initialAppSnapshot());
+    }
+
     assert(switched);
     (void) switched; // Silence compilation warning about unused variable.
   } else {
@@ -319,7 +366,7 @@ void AppsContainer::run() {
        * destroyed from the pool. To avoid using them before packing the app
        * (in App::willBecomeInactive for instance), we tidy them early on. */
       s_activeApp->snapshot()->tidy();
-      /* When an app encoutered an exception due to a full pool, the next time
+      /* When an app encountered an exception due to a full pool, the next time
        * the user enters the app, the same exception could happen again which
        * would prevent from reopening the app. To avoid being stuck outside the
        * app causing the issue, we reset its snapshot when leaving it due to
@@ -353,6 +400,8 @@ bool AppsContainer::updateBatteryState() {
 }
 
 void AppsContainer::refreshPreferences() {
+  m_suspendTimer.reset(GlobalPreferences::sharedGlobalPreferences()->idleBeforeSuspendSeconds()*1000/Timer::TickDuration);
+  m_backlightDimmingTimer.reset(GlobalPreferences::sharedGlobalPreferences()->idleBeforeDimmingSeconds()*1000/Timer::TickDuration);
   m_window.refreshPreferences();
 }
 
@@ -444,15 +493,6 @@ void AppsContainer::storageIsFull() {
 
 Window * AppsContainer::window() {
   return &m_window;
-}
-
-int AppsContainer::numberOfContainerTimers() {
-  return 4;
-}
-
-Timer * AppsContainer::containerTimerAtIndex(int i) {
-  Timer * timers[4] = {&m_batteryTimer, &m_suspendTimer, &m_backlightDimmingTimer, &m_clockTimer};
-  return timers[i];
 }
 
 void AppsContainer::resetShiftAlphaStatus() {

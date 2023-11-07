@@ -54,7 +54,7 @@ STATIC mp_obj_t code_execute(mp_obj_code_t *self, mp_obj_dict_t *globals, mp_obj
     // the correct one
     if (mp_obj_is_type(self->module_fun, &mp_type_fun_bc)) {
         mp_obj_fun_bc_t *fun_bc = MP_OBJ_TO_PTR(self->module_fun);
-        fun_bc->globals = globals;
+        ((mp_module_context_t *)fun_bc->context)->module.globals = globals;
     }
 
     // execute code
@@ -90,15 +90,20 @@ STATIC mp_obj_t mp_builtin_compile(size_t n_args, const mp_obj_t *args) {
     qstr mode = mp_obj_str_get_qstr(args[2]);
     mp_parse_input_kind_t parse_input_kind;
     switch (mode) {
-        case MP_QSTR_single: parse_input_kind = MP_PARSE_SINGLE_INPUT; break;
-        case MP_QSTR_exec: parse_input_kind = MP_PARSE_FILE_INPUT; break;
-        case MP_QSTR_eval: parse_input_kind = MP_PARSE_EVAL_INPUT; break;
+        case MP_QSTR_single:
+            parse_input_kind = MP_PARSE_SINGLE_INPUT;
+            break;
+        case MP_QSTR_exec:
+            parse_input_kind = MP_PARSE_FILE_INPUT;
+            break;
+        case MP_QSTR_eval:
+            parse_input_kind = MP_PARSE_EVAL_INPUT;
+            break;
         default:
-            mp_raise_ValueError("bad compile mode");
+            mp_raise_ValueError(MP_ERROR_TEXT("bad compile mode"));
     }
 
-    mp_obj_code_t *code = m_new_obj(mp_obj_code_t);
-    code->base.type = &mp_type_code;
+    mp_obj_code_t *code = mp_obj_malloc(mp_obj_code_t, &mp_type_code);
     code->module_fun = mp_parse_compile_execute(lex, parse_input_kind, NULL, NULL);
     return MP_OBJ_FROM_PTR(code);
 }
@@ -130,17 +135,18 @@ STATIC mp_obj_t eval_exec_helper(size_t n_args, const mp_obj_t *args, mp_parse_i
     }
     #endif
 
-    size_t str_len;
-    const char *str = mp_obj_str_get_data(args[0], &str_len);
+    // Extract the source code.
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(args[0], &bufinfo, MP_BUFFER_READ);
 
     // create the lexer
     // MP_PARSE_SINGLE_INPUT is used to indicate a file input
     mp_lexer_t *lex;
     if (MICROPY_PY_BUILTINS_EXECFILE && parse_input_kind == MP_PARSE_SINGLE_INPUT) {
-        lex = mp_lexer_new_from_file(str);
+        lex = mp_lexer_new_from_file(bufinfo.buf);
         parse_input_kind = MP_PARSE_FILE_INPUT;
     } else {
-        lex = mp_lexer_new_from_str_len(MP_QSTR__lt_string_gt_, str, str_len, 0);
+        lex = mp_lexer_new_from_str_len(MP_QSTR__lt_string_gt_, bufinfo.buf, bufinfo.len, 0);
     }
 
     return mp_parse_compile_execute(lex, parse_input_kind, globals, locals);

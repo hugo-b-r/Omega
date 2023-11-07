@@ -23,14 +23,14 @@ public:
   void loadSyntaxHighlighter() { m_contentView.loadSyntaxHighlighter(); }
   void unloadSyntaxHighlighter() { m_contentView.unloadSyntaxHighlighter(); }
   bool handleEvent(Ion::Events::Event event) override;
-  bool handleEventWithText(const char * text, bool indentation = false, bool forceCursorRightOfText = false) override;
+  bool handleEventWithText(const char * text, bool indentation = false, bool forceCursorRightOfText = false, bool shouldRemoveLastCharacter = false) override;
   /* autocompletionType returns:
    * - EndOfIdentifier if there is currently autocompletion, or if the cursor is
    *   at the end of an identifier,
    * - MiddleOfIdentifier is the cursor is in the middle of an identifier,
    * - No identifier otherwise.
    * The autocompletionLocation can be provided with autocompletionLocation, or
-   * retreived with autocompletionLocationBeginning and autocompletionLocationEnd. */
+   * retrieved with autocompletionLocationBeginning and autocompletionLocationEnd. */
   AutocompletionType autocompletionType(const char * autocompletionLocation = nullptr, const char ** autocompletionLocationBeginning = nullptr, const char ** autocompletionLocationEnd = nullptr) const;
   bool isAutocompleting() const { return m_contentView.isAutocompleting(); }
 protected:

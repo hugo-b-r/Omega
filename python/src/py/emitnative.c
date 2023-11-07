@@ -48,6 +48,7 @@
 
 #include "py/emit.h"
 #include "py/nativeglue.h"
+#include "py/objfun.h"
 #include "py/objstr.h"
 
 #if MICROPY_DEBUG_VERBOSE // print debugging info
@@ -62,20 +63,26 @@
 
 // C stack layout for native functions:
 //  0:                          nlr_buf_t [optional]
-//  emit->code_state_start:     mp_code_state_t
+//                              return_value [optional word]
+//                              exc_handler_unwind [optional word]
+//  emit->code_state_start:     mp_code_state_native_t
 //  emit->stack_start:          Python object stack             | emit->n_state
 //                              locals (reversed, L0 at end)    |
 //
 // C stack layout for native generator functions:
 //  0=emit->stack_start:        nlr_buf_t
+//                              return_value
+//                              exc_handler_unwind [optional word]
 //
 //  Then REG_GENERATOR_STATE points to:
-//  0=emit->code_state_start:   mp_code_state_t
+//  0=emit->code_state_start:   mp_code_state_native_t
 //  emit->stack_start:          Python object stack             | emit->n_state
 //                              locals (reversed, L0 at end)    |
 //
 // C stack layout for viper functions:
 //  0:                          nlr_buf_t [optional]
+//                              return_value [optional word]
+//                              exc_handler_unwind [optional word]
 //  emit->code_state_start:     fun_obj, old_globals [optional]
 //  emit->stack_start:          Python object stack             | emit->n_state
 //                              locals (reversed, L0 at end)    |
@@ -87,14 +94,18 @@
 #else
 #define SIZEOF_NLR_BUF (sizeof(nlr_buf_t) / sizeof(uintptr_t))
 #endif
-#define SIZEOF_CODE_STATE (sizeof(mp_code_state_t) / sizeof(uintptr_t))
-#define OFFSETOF_CODE_STATE_STATE (offsetof(mp_code_state_t, state) / sizeof(uintptr_t))
-#define OFFSETOF_CODE_STATE_FUN_BC (offsetof(mp_code_state_t, fun_bc) / sizeof(uintptr_t))
-#define OFFSETOF_CODE_STATE_IP (offsetof(mp_code_state_t, ip) / sizeof(uintptr_t))
-#define OFFSETOF_CODE_STATE_SP (offsetof(mp_code_state_t, sp) / sizeof(uintptr_t))
-#define OFFSETOF_OBJ_FUN_BC_GLOBALS (offsetof(mp_obj_fun_bc_t, globals) / sizeof(uintptr_t))
+#define SIZEOF_CODE_STATE (sizeof(mp_code_state_native_t) / sizeof(uintptr_t))
+#define OFFSETOF_CODE_STATE_STATE (offsetof(mp_code_state_native_t, state) / sizeof(uintptr_t))
+#define OFFSETOF_CODE_STATE_FUN_BC (offsetof(mp_code_state_native_t, fun_bc) / sizeof(uintptr_t))
+#define OFFSETOF_CODE_STATE_IP (offsetof(mp_code_state_native_t, ip) / sizeof(uintptr_t))
+#define OFFSETOF_CODE_STATE_SP (offsetof(mp_code_state_native_t, sp) / sizeof(uintptr_t))
+#define OFFSETOF_CODE_STATE_N_STATE (offsetof(mp_code_state_native_t, n_state) / sizeof(uintptr_t))
+#define OFFSETOF_OBJ_FUN_BC_CONTEXT (offsetof(mp_obj_fun_bc_t, context) / sizeof(uintptr_t))
+#define OFFSETOF_OBJ_FUN_BC_CHILD_TABLE (offsetof(mp_obj_fun_bc_t, child_table) / sizeof(uintptr_t))
 #define OFFSETOF_OBJ_FUN_BC_BYTECODE (offsetof(mp_obj_fun_bc_t, bytecode) / sizeof(uintptr_t))
-#define OFFSETOF_OBJ_FUN_BC_CONST_TABLE (offsetof(mp_obj_fun_bc_t, const_table) / sizeof(uintptr_t))
+#define OFFSETOF_MODULE_CONTEXT_QSTR_TABLE (offsetof(mp_module_context_t, constants.qstr_table) / sizeof(uintptr_t))
+#define OFFSETOF_MODULE_CONTEXT_OBJ_TABLE (offsetof(mp_module_context_t, constants.obj_table) / sizeof(uintptr_t))
+#define OFFSETOF_MODULE_CONTEXT_GLOBALS (offsetof(mp_module_context_t, module.globals) / sizeof(uintptr_t))
 
 // If not already defined, set parent args to same as child call registers
 #ifndef REG_PARENT_RET
@@ -116,6 +127,9 @@
 #define NEED_GLOBAL_EXC_HANDLER(emit) ((emit)->scope->exc_stack_size > 0 \
     || ((emit)->scope->scope_flags & (MP_SCOPE_FLAG_GENERATOR | MP_SCOPE_FLAG_REFGLOBALS)))
 
+// Whether a slot is needed to store LOCAL_IDX_EXC_HANDLER_UNWIND
+#define NEED_EXC_HANDLER_UNWIND(emit) ((emit)->scope->exc_stack_size > 0)
+
 // Whether registers can be used to store locals (only true if there are no
 // exception handlers, because otherwise an nlr_jump will restore registers to
 // their state at the start of the function and updates to locals will be lost)
@@ -124,18 +138,45 @@
 // Indices within the local C stack for various variables
 #define LOCAL_IDX_EXC_VAL(emit) (NLR_BUF_IDX_RET_VAL)
 #define LOCAL_IDX_EXC_HANDLER_PC(emit) (NLR_BUF_IDX_LOCAL_1)
-#define LOCAL_IDX_EXC_HANDLER_UNWIND(emit) (NLR_BUF_IDX_LOCAL_2)
-#define LOCAL_IDX_RET_VAL(emit) (NLR_BUF_IDX_LOCAL_3)
+#define LOCAL_IDX_EXC_HANDLER_UNWIND(emit) (SIZEOF_NLR_BUF + 1) // this needs a dedicated variable outside nlr_buf_t
+#define LOCAL_IDX_RET_VAL(emit) (SIZEOF_NLR_BUF) // needed when NEED_GLOBAL_EXC_HANDLER is true
 #define LOCAL_IDX_FUN_OBJ(emit) ((emit)->code_state_start + OFFSETOF_CODE_STATE_FUN_BC)
 #define LOCAL_IDX_OLD_GLOBALS(emit) ((emit)->code_state_start + OFFSETOF_CODE_STATE_IP)
 #define LOCAL_IDX_GEN_PC(emit) ((emit)->code_state_start + OFFSETOF_CODE_STATE_IP)
 #define LOCAL_IDX_LOCAL_VAR(emit, local_num) ((emit)->stack_start + (emit)->n_state - 1 - (local_num))
 
+#if MICROPY_PERSISTENT_CODE_SAVE
+
+// When building with the ability to save native code to .mpy files:
+//  - Qstrs are indirect via qstr_table, and REG_LOCAL_3 always points to qstr_table.
+//  - In a generator no registers are used to store locals, and REG_LOCAL_2 points to the generator state.
+//  - At most 2 registers hold local variables (see CAN_USE_REGS_FOR_LOCALS for when this is possible).
+
+#define REG_GENERATOR_STATE (REG_LOCAL_2)
+#define REG_QSTR_TABLE (REG_LOCAL_3)
+#define MAX_REGS_FOR_LOCAL_VARS (2)
+
+STATIC const uint8_t reg_local_table[MAX_REGS_FOR_LOCAL_VARS] = {REG_LOCAL_1, REG_LOCAL_2};
+
+#else
+
+// When building without the ability to save native code to .mpy files:
+//  - Qstrs values are written directly into the machine code.
+//  - In a generator no registers are used to store locals, and REG_LOCAL_3 points to the generator state.
+//  - At most 3 registers hold local variables (see CAN_USE_REGS_FOR_LOCALS for when this is possible).
+
 #define REG_GENERATOR_STATE (REG_LOCAL_3)
+#define MAX_REGS_FOR_LOCAL_VARS (3)
+
+STATIC const uint8_t reg_local_table[MAX_REGS_FOR_LOCAL_VARS] = {REG_LOCAL_1, REG_LOCAL_2, REG_LOCAL_3};
+
+#endif
+
+#define REG_LOCAL_LAST (reg_local_table[MAX_REGS_FOR_LOCAL_VARS - 1])
 
 #define EMIT_NATIVE_VIPER_TYPE_ERROR(emit, ...) do { \
         *emit->error_slot = mp_obj_new_exception_msg_varg(&mp_type_ViperTypeError, __VA_ARGS__); \
-    } while (0)
+} while (0)
 
 typedef enum {
     STACK_VALUE,
@@ -163,15 +204,25 @@ typedef enum {
 
 STATIC qstr vtype_to_qstr(vtype_kind_t vtype) {
     switch (vtype) {
-        case VTYPE_PYOBJ: return MP_QSTR_object;
-        case VTYPE_BOOL: return MP_QSTR_bool;
-        case VTYPE_INT: return MP_QSTR_int;
-        case VTYPE_UINT: return MP_QSTR_uint;
-        case VTYPE_PTR: return MP_QSTR_ptr;
-        case VTYPE_PTR8: return MP_QSTR_ptr8;
-        case VTYPE_PTR16: return MP_QSTR_ptr16;
-        case VTYPE_PTR32: return MP_QSTR_ptr32;
-        case VTYPE_PTR_NONE: default: return MP_QSTR_None;
+        case VTYPE_PYOBJ:
+            return MP_QSTR_object;
+        case VTYPE_BOOL:
+            return MP_QSTR_bool;
+        case VTYPE_INT:
+            return MP_QSTR_int;
+        case VTYPE_UINT:
+            return MP_QSTR_uint;
+        case VTYPE_PTR:
+            return MP_QSTR_ptr;
+        case VTYPE_PTR8:
+            return MP_QSTR_ptr8;
+        case VTYPE_PTR16:
+            return MP_QSTR_ptr16;
+        case VTYPE_PTR32:
+            return MP_QSTR_ptr32;
+        case VTYPE_PTR_NONE:
+        default:
+            return MP_QSTR_None;
     }
 }
 
@@ -195,12 +246,14 @@ typedef struct _exc_stack_entry_t {
 } exc_stack_entry_t;
 
 struct _emit_t {
+    mp_emit_common_t *emit_common;
     mp_obj_t *error_slot;
     uint *label_slot;
     uint exit_label;
     int pass;
 
     bool do_viper_types;
+    bool prelude_offset_uses_u16_encoding;
 
     mp_uint_t local_vtype_alloc;
     vtype_kind_t *local_vtype;
@@ -214,22 +267,14 @@ struct _emit_t {
     exc_stack_entry_t *exc_stack;
 
     int prelude_offset;
+    int prelude_ptr_index;
     int start_offset;
     int n_state;
     uint16_t code_state_start;
     uint16_t stack_start;
     int stack_size;
+    uint16_t n_info;
     uint16_t n_cell;
-
-    uint16_t const_table_cur_obj;
-    uint16_t const_table_num_obj;
-    uint16_t const_table_cur_raw_code;
-    mp_uint_t *const_table;
-
-    #if MICROPY_PERSISTENT_CODE_SAVE
-    uint16_t qstr_link_cur;
-    mp_qstr_link_entry_t *qstr_link;
-    #endif
 
     bool last_emit_was_return_value;
 
@@ -238,14 +283,14 @@ struct _emit_t {
     ASM_T *as;
 };
 
-STATIC const uint8_t reg_local_table[REG_LOCAL_NUM] = {REG_LOCAL_1, REG_LOCAL_2, REG_LOCAL_3};
-
+STATIC void emit_load_reg_with_object(emit_t *emit, int reg, mp_obj_t obj);
 STATIC void emit_native_global_exc_entry(emit_t *emit);
 STATIC void emit_native_global_exc_exit(emit_t *emit);
 STATIC void emit_native_load_const_obj(emit_t *emit, mp_obj_t obj);
 
-emit_t *EXPORT_FUN(new)(mp_obj_t *error_slot, uint *label_slot, mp_uint_t max_num_labels) {
+emit_t *EXPORT_FUN(new)(mp_emit_common_t * emit_common, mp_obj_t *error_slot, uint *label_slot, mp_uint_t max_num_labels) {
     emit_t *emit = m_new0(emit_t, 1);
+    emit->emit_common = emit_common;
     emit->error_slot = error_slot;
     emit->label_slot = label_slot;
     emit->stack_info_alloc = 8;
@@ -257,7 +302,7 @@ emit_t *EXPORT_FUN(new)(mp_obj_t *error_slot, uint *label_slot, mp_uint_t max_nu
     return emit;
 }
 
-void EXPORT_FUN(free)(emit_t *emit) {
+void EXPORT_FUN(free)(emit_t * emit) {
     mp_asm_base_deinit(&emit->as->base, false);
     m_del_obj(ASM_T, emit->as);
     m_del(exc_stack_entry_t, emit->exc_stack, emit->exc_stack_alloc);
@@ -299,12 +344,7 @@ STATIC void emit_native_mov_reg_state_addr(emit_t *emit, int reg_dest, int local
 
 STATIC void emit_native_mov_reg_qstr(emit_t *emit, int arg_reg, qstr qst) {
     #if MICROPY_PERSISTENT_CODE_SAVE
-    size_t loc = ASM_MOV_REG_IMM_FIX_U16(emit->as, arg_reg, qst);
-    size_t link_idx = emit->qstr_link_cur++;
-    if (emit->pass == MP_PASS_EMIT) {
-        emit->qstr_link[link_idx].off = loc << 2 | 1;
-        emit->qstr_link[link_idx].qst = qst;
-    }
+    ASM_LOAD16_REG_REG_OFFSET(emit->as, arg_reg, REG_QSTR_TABLE, mp_emit_common_use_qstr(emit->emit_common, qst));
     #else
     ASM_MOV_REG_IMM(emit->as, arg_reg, qst);
     #endif
@@ -312,12 +352,7 @@ STATIC void emit_native_mov_reg_qstr(emit_t *emit, int arg_reg, qstr qst) {
 
 STATIC void emit_native_mov_reg_qstr_obj(emit_t *emit, int reg_dest, qstr qst) {
     #if MICROPY_PERSISTENT_CODE_SAVE
-    size_t loc = ASM_MOV_REG_IMM_FIX_WORD(emit->as, reg_dest, (mp_uint_t)MP_OBJ_NEW_QSTR(qst));
-    size_t link_idx = emit->qstr_link_cur++;
-    if (emit->pass == MP_PASS_EMIT) {
-        emit->qstr_link[link_idx].off = loc << 2 | 2;
-        emit->qstr_link[link_idx].qst = qst;
-    }
+    emit_load_reg_with_object(emit, reg_dest, MP_OBJ_NEW_QSTR(qst));
     #else
     ASM_MOV_REG_IMM(emit->as, reg_dest, (mp_uint_t)MP_OBJ_NEW_QSTR(qst));
     #endif
@@ -335,15 +370,6 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
     emit->pass = pass;
     emit->do_viper_types = scope->emit_options == MP_EMIT_OPT_VIPER;
     emit->stack_size = 0;
-    #if N_PRELUDE_AS_BYTES_OBJ
-    emit->const_table_cur_obj = emit->do_viper_types ? 0 : 1; // reserve first obj for prelude bytes obj
-    #else
-    emit->const_table_cur_obj = 0;
-    #endif
-    emit->const_table_cur_raw_code = 0;
-    #if MICROPY_PERSISTENT_CODE_SAVE
-    emit->qstr_link_cur = 0;
-    #endif
     emit->last_emit_was_return_value = false;
     emit->scope = scope;
 
@@ -391,11 +417,17 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
 
     // generate code for entry to function
 
-    // Work out start of code state (mp_code_state_t or reduced version for viper)
+    // Work out start of code state (mp_code_state_native_t or reduced version for viper)
     emit->code_state_start = 0;
     if (NEED_GLOBAL_EXC_HANDLER(emit)) {
-        emit->code_state_start = SIZEOF_NLR_BUF;
+        emit->code_state_start = SIZEOF_NLR_BUF; // for nlr_buf_t
+        emit->code_state_start += 1;  // for return_value
+        if (NEED_EXC_HANDLER_UNWIND(emit)) {
+            emit->code_state_start += 1;
+        }
     }
+
+    size_t fun_table_off = mp_emit_common_use_const_obj(emit->emit_common, MP_OBJ_FROM_PTR(&mp_fun_table));
 
     if (emit->do_viper_types) {
         // Work out size of state (locals plus stack)
@@ -404,11 +436,11 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
         int num_locals_in_regs = 0;
         if (CAN_USE_REGS_FOR_LOCALS(emit)) {
             num_locals_in_regs = scope->num_locals;
-            if (num_locals_in_regs > REG_LOCAL_NUM) {
-                num_locals_in_regs = REG_LOCAL_NUM;
+            if (num_locals_in_regs > MAX_REGS_FOR_LOCAL_VARS) {
+                num_locals_in_regs = MAX_REGS_FOR_LOCAL_VARS;
             }
-            // Need a spot for REG_LOCAL_3 if 4 or more args (see below)
-            if (scope->num_pos_args >= 4) {
+            // Need a spot for REG_LOCAL_LAST (see below)
+            if (scope->num_pos_args >= MAX_REGS_FOR_LOCAL_VARS + 1) {
                 --num_locals_in_regs;
             }
         }
@@ -432,23 +464,27 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
         #endif
 
         // Load REG_FUN_TABLE with a pointer to mp_fun_table, found in the const_table
-        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_LOCAL_3, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_CONST_TABLE);
-        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_LOCAL_3, 0);
+        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_CONTEXT);
+        #if MICROPY_PERSISTENT_CODE_SAVE
+        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_QSTR_TABLE, REG_FUN_TABLE, OFFSETOF_MODULE_CONTEXT_QSTR_TABLE);
+        #endif
+        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_FUN_TABLE, OFFSETOF_MODULE_CONTEXT_OBJ_TABLE);
+        ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_FUN_TABLE, fun_table_off);
 
         // Store function object (passed as first arg) to stack if needed
         if (NEED_FUN_OBJ(emit)) {
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_FUN_OBJ(emit), REG_PARENT_ARG_1);
         }
 
-        // Put n_args in REG_ARG_1, n_kw in REG_ARG_2, args array in REG_LOCAL_3
+        // Put n_args in REG_ARG_1, n_kw in REG_ARG_2, args array in REG_LOCAL_LAST
         #if N_X86
         asm_x86_mov_arg_to_r32(emit->as, 1, REG_ARG_1);
         asm_x86_mov_arg_to_r32(emit->as, 2, REG_ARG_2);
-        asm_x86_mov_arg_to_r32(emit->as, 3, REG_LOCAL_3);
+        asm_x86_mov_arg_to_r32(emit->as, 3, REG_LOCAL_LAST);
         #else
         ASM_MOV_REG_REG(emit->as, REG_ARG_1, REG_PARENT_ARG_2);
         ASM_MOV_REG_REG(emit->as, REG_ARG_2, REG_PARENT_ARG_3);
-        ASM_MOV_REG_REG(emit->as, REG_LOCAL_3, REG_PARENT_ARG_4);
+        ASM_MOV_REG_REG(emit->as, REG_LOCAL_LAST, REG_PARENT_ARG_4);
         #endif
 
         // Check number of args matches this function, and call mp_arg_check_num_sig if not
@@ -463,21 +499,21 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
         // Store arguments into locals (reg or stack), converting to native if needed
         for (int i = 0; i < emit->scope->num_pos_args; i++) {
             int r = REG_ARG_1;
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_1, REG_LOCAL_3, i);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_1, REG_LOCAL_LAST, i);
             if (emit->local_vtype[i] != VTYPE_PYOBJ) {
                 emit_call_with_imm_arg(emit, MP_F_CONVERT_OBJ_TO_NATIVE, emit->local_vtype[i], REG_ARG_2);
                 r = REG_RET;
             }
-            // REG_LOCAL_3 points to the args array so be sure not to overwrite it if it's still needed
-            if (i < REG_LOCAL_NUM && CAN_USE_REGS_FOR_LOCALS(emit) && (i != 2 || emit->scope->num_pos_args == 3)) {
+            // REG_LOCAL_LAST points to the args array so be sure not to overwrite it if it's still needed
+            if (i < MAX_REGS_FOR_LOCAL_VARS && CAN_USE_REGS_FOR_LOCALS(emit) && (i != MAX_REGS_FOR_LOCAL_VARS - 1 || emit->scope->num_pos_args == MAX_REGS_FOR_LOCAL_VARS)) {
                 ASM_MOV_REG_REG(emit->as, reg_local_table[i], r);
             } else {
                 emit_native_mov_state_reg(emit, LOCAL_IDX_LOCAL_VAR(emit, i), r);
             }
         }
-        // Get 3rd local from the stack back into REG_LOCAL_3 if this reg couldn't be written to above
-        if (emit->scope->num_pos_args >= 4 && CAN_USE_REGS_FOR_LOCALS(emit)) {
-            ASM_MOV_REG_LOCAL(emit->as, REG_LOCAL_3, LOCAL_IDX_LOCAL_VAR(emit, 2));
+        // Get local from the stack back into REG_LOCAL_LAST if this reg couldn't be written to above
+        if (emit->scope->num_pos_args >= MAX_REGS_FOR_LOCAL_VARS + 1 && CAN_USE_REGS_FOR_LOCALS(emit)) {
+            ASM_MOV_REG_LOCAL(emit->as, REG_LOCAL_LAST, LOCAL_IDX_LOCAL_VAR(emit, MAX_REGS_FOR_LOCAL_VARS - 1));
         }
 
         emit_native_global_exc_entry(emit);
@@ -487,16 +523,13 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
         emit->n_state = scope->num_locals + scope->stack_size;
 
         if (emit->scope->scope_flags & MP_SCOPE_FLAG_GENERATOR) {
+            mp_asm_base_data(&emit->as->base, ASM_WORD_SIZE, (uintptr_t)emit->prelude_ptr_index);
+            mp_asm_base_data(&emit->as->base, ASM_WORD_SIZE, (uintptr_t)emit->start_offset);
+            ASM_ENTRY(emit->as, emit->code_state_start);
+
+            // Reset the state size for the state pointed to by REG_GENERATOR_STATE
             emit->code_state_start = 0;
             emit->stack_start = SIZEOF_CODE_STATE;
-            #if N_PRELUDE_AS_BYTES_OBJ
-            // Load index of prelude bytes object in const_table
-            mp_asm_base_data(&emit->as->base, ASM_WORD_SIZE, (uintptr_t)(emit->scope->num_pos_args + emit->scope->num_kwonly_args + 1));
-            #else
-            mp_asm_base_data(&emit->as->base, ASM_WORD_SIZE, (uintptr_t)emit->prelude_offset);
-            #endif
-            mp_asm_base_data(&emit->as->base, ASM_WORD_SIZE, (uintptr_t)emit->start_offset);
-            ASM_ENTRY(emit->as, SIZEOF_NLR_BUF);
 
             // Put address of code_state into REG_GENERATOR_STATE
             #if N_X86
@@ -513,8 +546,12 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
 
             // Load REG_FUN_TABLE with a pointer to mp_fun_table, found in the const_table
             ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_GENERATOR_STATE, LOCAL_IDX_FUN_OBJ(emit));
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_OBJ_FUN_BC_CONST_TABLE);
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_TEMP0, emit->scope->num_pos_args + emit->scope->num_kwonly_args);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_OBJ_FUN_BC_CONTEXT);
+            #if MICROPY_PERSISTENT_CODE_SAVE
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_QSTR_TABLE, REG_TEMP0, OFFSETOF_MODULE_CONTEXT_QSTR_TABLE);
+            #endif
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_MODULE_CONTEXT_OBJ_TABLE);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_TEMP0, fun_table_off);
         } else {
             // The locals and stack start after the code_state structure
             emit->stack_start = emit->code_state_start + SIZEOF_CODE_STATE;
@@ -532,27 +569,27 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
             #endif
 
             // Load REG_FUN_TABLE with a pointer to mp_fun_table, found in the const_table
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_LOCAL_3, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_CONST_TABLE);
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_LOCAL_3, emit->scope->num_pos_args + emit->scope->num_kwonly_args);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_CONTEXT);
+            #if MICROPY_PERSISTENT_CODE_SAVE
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_QSTR_TABLE, REG_FUN_TABLE, OFFSETOF_MODULE_CONTEXT_QSTR_TABLE);
+            #endif
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_FUN_TABLE, OFFSETOF_MODULE_CONTEXT_OBJ_TABLE);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_FUN_TABLE, fun_table_off);
 
             // Set code_state.fun_bc
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_FUN_OBJ(emit), REG_PARENT_ARG_1);
 
-            // Set code_state.ip (offset from start of this function to prelude info)
-            #if N_PRELUDE_AS_BYTES_OBJ
-            // Prelude is a bytes object in const_table; store ip = prelude->data - fun_bc->bytecode
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_LOCAL_3, REG_LOCAL_3, emit->scope->num_pos_args + emit->scope->num_kwonly_args + 1);
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_LOCAL_3, REG_LOCAL_3, offsetof(mp_obj_str_t, data) / sizeof(uintptr_t));
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_PARENT_ARG_1, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_BYTECODE);
-            ASM_SUB_REG_REG(emit->as, REG_LOCAL_3, REG_PARENT_ARG_1);
-            emit_native_mov_state_reg(emit, emit->code_state_start + OFFSETOF_CODE_STATE_IP, REG_LOCAL_3);
-            #else
-            // TODO this encoding may change size in the final pass, need to make it fixed
-            emit_native_mov_state_imm_via(emit, emit->code_state_start + OFFSETOF_CODE_STATE_IP, emit->prelude_offset, REG_PARENT_ARG_1);
-            #endif
+            // Set code_state.ip, a pointer to the beginning of the prelude.  This pointer is found
+            // either directly in mp_obj_fun_bc_t.child_table (if there are no children), or in
+            // mp_obj_fun_bc_t.child_table[num_children] (if num_children > 0).
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_PARENT_ARG_1, REG_PARENT_ARG_1, OFFSETOF_OBJ_FUN_BC_CHILD_TABLE);
+            if (emit->prelude_ptr_index != 0) {
+                ASM_LOAD_REG_REG_OFFSET(emit->as, REG_PARENT_ARG_1, REG_PARENT_ARG_1, emit->prelude_ptr_index);
+            }
+            emit_native_mov_state_reg(emit, emit->code_state_start + OFFSETOF_CODE_STATE_IP, REG_PARENT_ARG_1);
 
             // Set code_state.n_state (only works on little endian targets due to n_state being uint16_t)
-            emit_native_mov_state_imm_via(emit, emit->code_state_start + offsetof(mp_code_state_t, n_state) / sizeof(uintptr_t), emit->n_state, REG_ARG_1);
+            emit_native_mov_state_imm_via(emit, emit->code_state_start + OFFSETOF_CODE_STATE_N_STATE, emit->n_state, REG_ARG_1);
 
             // Put address of code_state into first arg
             ASM_MOV_REG_LOCAL_ADDR(emit->as, REG_ARG_1, emit->code_state_start);
@@ -582,7 +619,7 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
 
         // cache some locals in registers, but only if no exception handlers
         if (CAN_USE_REGS_FOR_LOCALS(emit)) {
-            for (int i = 0; i < REG_LOCAL_NUM && i < scope->num_locals; ++i) {
+            for (int i = 0; i < MAX_REGS_FOR_LOCAL_VARS && i < scope->num_locals; ++i) {
                 ASM_MOV_REG_LOCAL(emit->as, reg_local_table[i], LOCAL_IDX_LOCAL_VAR(emit, i));
             }
         }
@@ -594,55 +631,47 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
                 emit->local_vtype[id->local_num] = VTYPE_PYOBJ;
             }
         }
-
-        if (pass == MP_PASS_EMIT) {
-            // write argument names as qstr objects
-            // see comment in corresponding part of emitbc.c about the logic here
-            for (int i = 0; i < scope->num_pos_args + scope->num_kwonly_args; i++) {
-                qstr qst = MP_QSTR__star_;
-                for (int j = 0; j < scope->id_info_len; ++j) {
-                    id_info_t *id = &scope->id_info[j];
-                    if ((id->flags & ID_FLAG_IS_PARAM) && id->local_num == i) {
-                        qst = id->qst;
-                        break;
-                    }
-                }
-                emit->const_table[i] = (mp_uint_t)MP_OBJ_NEW_QSTR(qst);
-            }
-        }
     }
-
 }
 
 static inline void emit_native_write_code_info_byte(emit_t *emit, byte val) {
     mp_asm_base_data(&emit->as->base, 1, val);
 }
 
-STATIC void emit_native_end_pass(emit_t *emit) {
+static inline void emit_native_write_code_info_qstr(emit_t *emit, qstr qst) {
+    mp_encode_uint(&emit->as->base, mp_asm_base_get_cur_to_write_bytes, mp_emit_common_use_qstr(emit->emit_common, qst));
+}
+
+STATIC bool emit_native_end_pass(emit_t *emit) {
     emit_native_global_exc_exit(emit);
 
     if (!emit->do_viper_types) {
         emit->prelude_offset = mp_asm_base_get_code_pos(&emit->as->base);
+        emit->prelude_ptr_index = emit->emit_common->ct_cur_child;
 
         size_t n_state = emit->n_state;
         size_t n_exc_stack = 0; // exc-stack not needed for native code
         MP_BC_PRELUDE_SIG_ENCODE(n_state, n_exc_stack, emit->scope, emit_native_write_code_info_byte, emit);
 
-        #if MICROPY_PERSISTENT_CODE
-        size_t n_info = 4;
-        #else
-        size_t n_info = 1;
-        #endif
-        MP_BC_PRELUDE_SIZE_ENCODE(n_info, emit->n_cell, emit_native_write_code_info_byte, emit);
+        size_t n_info = emit->n_info;
+        size_t n_cell = emit->n_cell;
+        MP_BC_PRELUDE_SIZE_ENCODE(n_info, n_cell, emit_native_write_code_info_byte, emit);
 
-        #if MICROPY_PERSISTENT_CODE
-        mp_asm_base_data(&emit->as->base, 1, emit->scope->simple_name);
-        mp_asm_base_data(&emit->as->base, 1, emit->scope->simple_name >> 8);
-        mp_asm_base_data(&emit->as->base, 1, emit->scope->source_file);
-        mp_asm_base_data(&emit->as->base, 1, emit->scope->source_file >> 8);
-        #else
-        mp_asm_base_data(&emit->as->base, 1, 1);
-        #endif
+        // bytecode prelude: source info (function and argument qstrs)
+        size_t info_start = mp_asm_base_get_code_pos(&emit->as->base);
+        emit_native_write_code_info_qstr(emit, emit->scope->simple_name);
+        for (int i = 0; i < emit->scope->num_pos_args + emit->scope->num_kwonly_args; i++) {
+            qstr qst = MP_QSTR__star_;
+            for (int j = 0; j < emit->scope->id_info_len; ++j) {
+                id_info_t *id = &emit->scope->id_info[j];
+                if ((id->flags & ID_FLAG_IS_PARAM) && id->local_num == i) {
+                    qst = id->qst;
+                    break;
+                }
+            }
+            emit_native_write_code_info_qstr(emit, qst);
+        }
+        emit->n_info = mp_asm_base_get_code_pos(&emit->as->base) - info_start;
 
         // bytecode prelude: initialise closed over variables
         size_t cell_start = mp_asm_base_get_code_pos(&emit->as->base);
@@ -655,15 +684,6 @@ STATIC void emit_native_end_pass(emit_t *emit) {
         }
         emit->n_cell = mp_asm_base_get_code_pos(&emit->as->base) - cell_start;
 
-        #if N_PRELUDE_AS_BYTES_OBJ
-        // Prelude bytes object is after qstr arg names and mp_fun_table
-        size_t table_off = emit->scope->num_pos_args + emit->scope->num_kwonly_args + 1;
-        if (emit->pass == MP_PASS_EMIT) {
-            void *buf = emit->as->base.code_base + emit->prelude_offset;
-            size_t n = emit->as->base.code_offset - emit->prelude_offset;
-            emit->const_table[table_off] = (uintptr_t)mp_obj_new_bytes(buf, n);
-        }
-        #endif
     }
 
     ASM_END_PASS(emit->as);
@@ -672,46 +692,45 @@ STATIC void emit_native_end_pass(emit_t *emit) {
     assert(emit->stack_size == 0);
     assert(emit->exc_stack_size == 0);
 
-    // Deal with const table accounting
-    assert(emit->pass <= MP_PASS_STACK_SIZE || (emit->const_table_num_obj == emit->const_table_cur_obj));
-    emit->const_table_num_obj = emit->const_table_cur_obj;
-    if (emit->pass == MP_PASS_CODE_SIZE) {
-        size_t const_table_alloc = 1 + emit->const_table_num_obj + emit->const_table_cur_raw_code;
-        size_t nqstr = 0;
-        if (!emit->do_viper_types) {
-            // Add room for qstr names of arguments
-            nqstr = emit->scope->num_pos_args + emit->scope->num_kwonly_args;
-            const_table_alloc += nqstr;
-        }
-        emit->const_table = m_new(mp_uint_t, const_table_alloc);
-        #if !MICROPY_DYNAMIC_COMPILER
-        // Store mp_fun_table pointer just after qstrs
-        // (but in dynamic-compiler mode eliminate dependency on mp_fun_table)
-        emit->const_table[nqstr] = (mp_uint_t)(uintptr_t)&mp_fun_table;
-        #endif
-
-        #if MICROPY_PERSISTENT_CODE_SAVE
-        size_t qstr_link_alloc = emit->qstr_link_cur;
-        if (qstr_link_alloc > 0) {
-            emit->qstr_link = m_new(mp_qstr_link_entry_t, qstr_link_alloc);
-        }
-        #endif
-    }
-
     if (emit->pass == MP_PASS_EMIT) {
         void *f = mp_asm_base_get_code(&emit->as->base);
         mp_uint_t f_len = mp_asm_base_get_code_size(&emit->as->base);
 
+        mp_raw_code_t **children = emit->emit_common->children;
+        if (!emit->do_viper_types) {
+            #if MICROPY_EMIT_NATIVE_PRELUDE_SEPARATE_FROM_MACHINE_CODE
+            // Executable code cannot be accessed byte-wise on this architecture, so copy
+            // the prelude to a separate memory region that is byte-wise readable.
+            void *buf = emit->as->base.code_base + emit->prelude_offset;
+            size_t n = emit->as->base.code_offset - emit->prelude_offset;
+            const uint8_t *prelude_ptr = memcpy(m_new(uint8_t, n), buf, n);
+            #else
+            // Point to the prelude directly, at the end of the machine code data.
+            const uint8_t *prelude_ptr = (const uint8_t *)f + emit->prelude_offset;
+            #endif
+
+            // Store the pointer to the prelude using the child_table.
+            assert(emit->prelude_ptr_index == emit->emit_common->ct_cur_child);
+            if (emit->prelude_ptr_index == 0) {
+                children = (void *)prelude_ptr;
+            } else {
+                children = m_renew(mp_raw_code_t *, children, emit->prelude_ptr_index, emit->prelude_ptr_index + 1);
+                children[emit->prelude_ptr_index] = (void *)prelude_ptr;
+            }
+        }
+
         mp_emit_glue_assign_native(emit->scope->raw_code,
             emit->do_viper_types ? MP_CODE_NATIVE_VIPER : MP_CODE_NATIVE_PY,
-            f, f_len, emit->const_table,
+            f, f_len,
+            children,
             #if MICROPY_PERSISTENT_CODE_SAVE
+            emit->emit_common->ct_cur_child,
             emit->prelude_offset,
-            emit->const_table_cur_obj, emit->const_table_cur_raw_code,
-            emit->qstr_link_cur, emit->qstr_link,
             #endif
-            emit->scope->num_pos_args, emit->scope->scope_flags, 0);
+            emit->scope->scope_flags, 0, 0);
     }
+
+    return true;
 }
 
 STATIC bool emit_native_last_emit_was_return_value(emit_t *emit) {
@@ -733,14 +752,14 @@ STATIC void adjust_stack(emit_t *emit, mp_int_t stack_size_delta) {
     if (emit->pass > MP_PASS_SCOPE && emit->stack_size > emit->scope->stack_size) {
         emit->scope->stack_size = emit->stack_size;
     }
-#ifdef DEBUG_PRINT
+    #ifdef DEBUG_PRINT
     DEBUG_printf("  adjust_stack; stack_size=%d+%d; stack now:", emit->stack_size - stack_size_delta, stack_size_delta);
     for (int i = 0; i < emit->stack_size; i++) {
         stack_info_t *si = &emit->stack_info[i];
         DEBUG_printf(" (v=%d k=%d %d)", si->vtype, si->kind, si->data.u_reg);
     }
     DEBUG_printf("\n");
-#endif
+    #endif
 }
 
 STATIC void emit_native_adjust_stack_size(emit_t *emit, mp_int_t delta) {
@@ -807,10 +826,13 @@ STATIC void need_reg_single(emit_t *emit, int reg_needed, int skip_stack_pos) {
     }
 }
 
+// Ensures all unsettled registers that hold Python values are copied to the
+// concrete Python stack.  All registers are then free to use.
 STATIC void need_reg_all(emit_t *emit) {
     for (int i = 0; i < emit->stack_size; i++) {
         stack_info_t *si = &emit->stack_info[i];
         if (si->kind == STACK_REG) {
+            DEBUG_printf("    reg(%u) to local(%u)\n", si->data.u_reg, emit->stack_start + i);
             si->kind = STACK_VALUE;
             emit_native_mov_state_reg(emit, emit->stack_start + i, si->data.u_reg);
         }
@@ -831,29 +853,27 @@ STATIC vtype_kind_t load_reg_stack_imm(emit_t *emit, int reg_dest, const stack_i
         } else if (si->vtype == VTYPE_PTR_NONE) {
             emit_native_mov_reg_const(emit, reg_dest, MP_F_CONST_NONE_OBJ);
         } else {
-            mp_raise_NotImplementedError("conversion to object");
+            mp_raise_NotImplementedError(MP_ERROR_TEXT("conversion to object"));
         }
         return VTYPE_PYOBJ;
     }
 }
 
+// Copies all unsettled registers and immediates that are Python values into the
+// concrete Python stack.  This ensures the concrete Python stack holds valid
+// values for the current stack_size.
+// This function may clobber REG_TEMP1.
 STATIC void need_stack_settled(emit_t *emit) {
     DEBUG_printf("  need_stack_settled; stack_size=%d\n", emit->stack_size);
-    for (int i = 0; i < emit->stack_size; i++) {
-        stack_info_t *si = &emit->stack_info[i];
-        if (si->kind == STACK_REG) {
-            DEBUG_printf("    reg(%u) to local(%u)\n", si->data.u_reg, emit->stack_start + i);
-            si->kind = STACK_VALUE;
-            emit_native_mov_state_reg(emit, emit->stack_start + i, si->data.u_reg);
-        }
-    }
+    need_reg_all(emit);
     for (int i = 0; i < emit->stack_size; i++) {
         stack_info_t *si = &emit->stack_info[i];
         if (si->kind == STACK_IMM) {
             DEBUG_printf("    imm(" INT_FMT ") to local(%u)\n", si->data.u_imm, emit->stack_start + i);
             si->kind = STACK_VALUE;
-            si->vtype = load_reg_stack_imm(emit, REG_TEMP0, si, false);
-            emit_native_mov_state_reg(emit, emit->stack_start + i, REG_TEMP0);
+            // using REG_TEMP1 to avoid clobbering REG_TEMP0 (aka REG_RET)
+            si->vtype = load_reg_stack_imm(emit, REG_TEMP1, si, false);
+            emit_native_mov_state_reg(emit, emit->stack_start + i, REG_TEMP1);
         }
     }
 }
@@ -1102,29 +1122,20 @@ STATIC exc_stack_entry_t *emit_native_pop_exc_stack(emit_t *emit) {
     return e;
 }
 
-STATIC void emit_load_reg_with_ptr(emit_t *emit, int reg, mp_uint_t ptr, size_t table_off) {
-    if (!emit->do_viper_types) {
-        // Skip qstr names of arguments
-        table_off += emit->scope->num_pos_args + emit->scope->num_kwonly_args;
-    }
-    if (emit->pass == MP_PASS_EMIT) {
-        emit->const_table[table_off] = ptr;
-    }
+STATIC void emit_load_reg_with_object(emit_t *emit, int reg, mp_obj_t obj) {
+    emit->scope->scope_flags |= MP_SCOPE_FLAG_HASCONSTS;
+    size_t table_off = mp_emit_common_use_const_obj(emit->emit_common, obj);
     emit_native_mov_reg_state(emit, REG_TEMP0, LOCAL_IDX_FUN_OBJ(emit));
-    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_OBJ_FUN_BC_CONST_TABLE);
+    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_OBJ_FUN_BC_CONTEXT);
+    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_MODULE_CONTEXT_OBJ_TABLE);
     ASM_LOAD_REG_REG_OFFSET(emit->as, reg, REG_TEMP0, table_off);
 }
 
-STATIC void emit_load_reg_with_object(emit_t *emit, int reg, mp_obj_t obj) {
-    // First entry is for mp_fun_table
-    size_t table_off = 1 + emit->const_table_cur_obj++;
-    emit_load_reg_with_ptr(emit, reg, (mp_uint_t)obj, table_off);
-}
-
-STATIC void emit_load_reg_with_raw_code(emit_t *emit, int reg, mp_raw_code_t *rc) {
-    // First entry is for mp_fun_table, then constant objects
-    size_t table_off = 1 + emit->const_table_num_obj + emit->const_table_cur_raw_code++;
-    emit_load_reg_with_ptr(emit, reg, (mp_uint_t)rc, table_off);
+STATIC void emit_load_reg_with_child(emit_t *emit, int reg, mp_raw_code_t *rc) {
+    size_t table_off = mp_emit_common_alloc_const_child(emit->emit_common, rc);
+    emit_native_mov_reg_state(emit, REG_TEMP0, LOCAL_IDX_FUN_OBJ(emit));
+    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_TEMP0, REG_TEMP0, OFFSETOF_OBJ_FUN_BC_CHILD_TABLE);
+    ASM_LOAD_REG_REG_OFFSET(emit->as, reg, REG_TEMP0, table_off);
 }
 
 STATIC void emit_native_label_assign(emit_t *emit, mp_uint_t l) {
@@ -1132,8 +1143,8 @@ STATIC void emit_native_label_assign(emit_t *emit, mp_uint_t l) {
 
     bool is_finally = false;
     if (emit->exc_stack_size > 0) {
-       exc_stack_entry_t *e = &emit->exc_stack[emit->exc_stack_size - 1];
-       is_finally = e->is_finally && e->label == l;
+        exc_stack_entry_t *e = &emit->exc_stack[emit->exc_stack_size - 1];
+        is_finally = e->is_finally && e->label == l;
     }
 
     if (is_finally) {
@@ -1168,7 +1179,8 @@ STATIC void emit_native_global_exc_entry(emit_t *emit) {
         if (!(emit->scope->scope_flags & MP_SCOPE_FLAG_GENERATOR)) {
             // Set new globals
             emit_native_mov_reg_state(emit, REG_ARG_1, LOCAL_IDX_FUN_OBJ(emit));
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_1, REG_ARG_1, OFFSETOF_OBJ_FUN_BC_GLOBALS);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_1, REG_ARG_1, OFFSETOF_OBJ_FUN_BC_CONTEXT);
+            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_1, REG_ARG_1, OFFSETOF_MODULE_CONTEXT_GLOBALS);
             emit_call(emit, MP_F_NATIVE_SWAP_GLOBALS);
 
             // Save old globals (or NULL if globals didn't change)
@@ -1199,14 +1211,12 @@ STATIC void emit_native_global_exc_entry(emit_t *emit) {
 
             // Wrap everything in an nlr context
             emit_native_label_assign(emit, nlr_label);
-            ASM_MOV_REG_LOCAL(emit->as, REG_LOCAL_2, LOCAL_IDX_EXC_HANDLER_UNWIND(emit));
             ASM_MOV_REG_LOCAL_ADDR(emit->as, REG_ARG_1, 0);
             emit_call(emit, MP_F_NLR_PUSH);
             #if N_NLR_SETJMP
             ASM_MOV_REG_LOCAL_ADDR(emit->as, REG_ARG_1, 2);
             emit_call(emit, MP_F_SETJMP);
             #endif
-            ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_HANDLER_UNWIND(emit), REG_LOCAL_2);
             ASM_JUMP_IF_REG_NONZERO(emit->as, REG_RET, global_except_label, true);
 
             // Clear PC of current code block, and jump there to resume execution
@@ -1216,12 +1226,6 @@ STATIC void emit_native_global_exc_entry(emit_t *emit) {
 
             // Global exception handler: check for valid exception handler
             emit_native_label_assign(emit, global_except_label);
-            #if N_NLR_SETJMP
-            // Reload REG_FUN_TABLE, since it may be clobbered by longjmp
-            emit_native_mov_reg_state(emit, REG_LOCAL_1, LOCAL_IDX_FUN_OBJ(emit));
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_LOCAL_1, REG_LOCAL_1, offsetof(mp_obj_fun_bc_t, const_table) / sizeof(uintptr_t));
-            ASM_LOAD_REG_REG_OFFSET(emit->as, REG_FUN_TABLE, REG_LOCAL_1, emit->scope->num_pos_args + emit->scope->num_kwonly_args);
-            #endif
             ASM_MOV_REG_LOCAL(emit->as, REG_LOCAL_1, LOCAL_IDX_EXC_HANDLER_PC(emit));
             ASM_JUMP_IF_REG_NONZERO(emit->as, REG_LOCAL_1, nlr_label, false);
         }
@@ -1350,11 +1354,7 @@ STATIC void emit_native_import(emit_t *emit, qstr qst, int kind) {
 STATIC void emit_native_load_const_tok(emit_t *emit, mp_token_kind_t tok) {
     DEBUG_printf("load_const_tok(tok=%u)\n", tok);
     if (tok == MP_TOKEN_ELLIPSIS) {
-        #if MICROPY_PERSISTENT_CODE_SAVE
         emit_native_load_const_obj(emit, MP_OBJ_FROM_PTR(&mp_const_ellipsis_obj));
-        #else
-        emit_post_push_imm(emit, VTYPE_PYOBJ, (mp_uint_t)MP_OBJ_FROM_PTR(&mp_const_ellipsis_obj));
-        #endif
     } else {
         emit_native_pre(emit);
         if (tok == MP_TOKEN_KW_NONE) {
@@ -1389,7 +1389,6 @@ STATIC void emit_native_load_const_str(emit_t *emit, qstr qst) {
 }
 
 STATIC void emit_native_load_const_obj(emit_t *emit, mp_obj_t obj) {
-    emit->scope->scope_flags |= MP_SCOPE_FLAG_HASCONSTS;
     emit_native_pre(emit);
     need_reg_single(emit, REG_RET, 0);
     emit_load_reg_with_object(emit, REG_RET, obj);
@@ -1405,10 +1404,10 @@ STATIC void emit_native_load_fast(emit_t *emit, qstr qst, mp_uint_t local_num) {
     DEBUG_printf("load_fast(%s, " UINT_FMT ")\n", qstr_str(qst), local_num);
     vtype_kind_t vtype = emit->local_vtype[local_num];
     if (vtype == VTYPE_UNBOUND) {
-        EMIT_NATIVE_VIPER_TYPE_ERROR(emit, "local '%q' used before type known", qst);
+        EMIT_NATIVE_VIPER_TYPE_ERROR(emit, MP_ERROR_TEXT("local '%q' used before type known"), qst);
     }
     emit_native_pre(emit);
-    if (local_num < REG_LOCAL_NUM && CAN_USE_REGS_FOR_LOCALS(emit)) {
+    if (local_num < MAX_REGS_FOR_LOCAL_VARS && CAN_USE_REGS_FOR_LOCALS(emit)) {
         emit_post_push_reg(emit, vtype, reg_local_table[local_num]);
     } else {
         need_reg_single(emit, REG_TEMP0, 0);
@@ -1525,6 +1524,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
             int reg_base = REG_ARG_1;
             int reg_index = REG_ARG_2;
             emit_pre_pop_reg_flexible(emit, &vtype_base, &reg_base, reg_index, reg_index);
+            need_reg_single(emit, REG_RET, 0);
             switch (vtype_base) {
                 case VTYPE_PTR8: {
                     // pointer to 8-bit memory
@@ -1580,7 +1580,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
                 }
                 default:
                     EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                        "can't load from '%q'", vtype_to_qstr(vtype_base));
+                        MP_ERROR_TEXT("can't load from '%q'"), vtype_to_qstr(vtype_base));
             }
         } else {
             // index is not an immediate
@@ -1588,9 +1588,10 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
             int reg_index = REG_ARG_2;
             emit_pre_pop_reg_flexible(emit, &vtype_index, &reg_index, REG_ARG_1, REG_ARG_1);
             emit_pre_pop_reg(emit, &vtype_base, REG_ARG_1);
+            need_reg_single(emit, REG_RET, 0);
             if (vtype_index != VTYPE_INT && vtype_index != VTYPE_UINT) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                    "can't load with '%q' index", vtype_to_qstr(vtype_index));
+                    MP_ERROR_TEXT("can't load with '%q' index"), vtype_to_qstr(vtype_index));
             }
             switch (vtype_base) {
                 case VTYPE_PTR8: {
@@ -1618,7 +1619,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
                 }
                 default:
                     EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                        "can't load from '%q'", vtype_to_qstr(vtype_base));
+                        MP_ERROR_TEXT("can't load from '%q'"), vtype_to_qstr(vtype_base));
             }
         }
         emit_post_push_reg(emit, VTYPE_INT, REG_RET);
@@ -1627,7 +1628,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
 
 STATIC void emit_native_store_fast(emit_t *emit, qstr qst, mp_uint_t local_num) {
     vtype_kind_t vtype;
-    if (local_num < REG_LOCAL_NUM && CAN_USE_REGS_FOR_LOCALS(emit)) {
+    if (local_num < MAX_REGS_FOR_LOCAL_VARS && CAN_USE_REGS_FOR_LOCALS(emit)) {
         emit_pre_pop_reg(emit, &vtype, reg_local_table[local_num]);
     } else {
         emit_pre_pop_reg(emit, &vtype, REG_TEMP0);
@@ -1642,7 +1643,7 @@ STATIC void emit_native_store_fast(emit_t *emit, qstr qst, mp_uint_t local_num) 
     } else if (emit->local_vtype[local_num] != vtype) {
         // type of local is not the same as object stored in it
         EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-            "local '%q' has type '%q' but source is '%q'",
+            MP_ERROR_TEXT("local '%q' has type '%q' but source is '%q'"),
             qst, vtype_to_qstr(emit->local_vtype[local_num]), vtype_to_qstr(vtype));
     }
 }
@@ -1735,7 +1736,7 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
             int reg_index = REG_ARG_2;
             int reg_value = REG_ARG_3;
             emit_pre_pop_reg_flexible(emit, &vtype_base, &reg_base, reg_index, reg_value);
-            #if N_X86
+            #if N_X64 || N_X86
             // special case: x86 needs byte stores to be from lower 4 regs (REG_ARG_3 is EDX)
             emit_pre_pop_reg(emit, &vtype_value, reg_value);
             #else
@@ -1743,7 +1744,7 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
             #endif
             if (vtype_value != VTYPE_BOOL && vtype_value != VTYPE_INT && vtype_value != VTYPE_UINT) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                    "can't store '%q'", vtype_to_qstr(vtype_value));
+                    MP_ERROR_TEXT("can't store '%q'"), vtype_to_qstr(vtype_value));
             }
             switch (vtype_base) {
                 case VTYPE_PTR8: {
@@ -1809,7 +1810,7 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
                 }
                 default:
                     EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                        "can't store to '%q'", vtype_to_qstr(vtype_base));
+                        MP_ERROR_TEXT("can't store to '%q'"), vtype_to_qstr(vtype_base));
             }
         } else {
             // index is not an immediate
@@ -1820,9 +1821,9 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
             emit_pre_pop_reg(emit, &vtype_base, REG_ARG_1);
             if (vtype_index != VTYPE_INT && vtype_index != VTYPE_UINT) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                    "can't store with '%q' index", vtype_to_qstr(vtype_index));
+                    MP_ERROR_TEXT("can't store with '%q' index"), vtype_to_qstr(vtype_index));
             }
-            #if N_X86
+            #if N_X64 || N_X86
             // special case: x86 needs byte stores to be from lower 4 regs (REG_ARG_3 is EDX)
             emit_pre_pop_reg(emit, &vtype_value, reg_value);
             #else
@@ -1830,7 +1831,7 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
             #endif
             if (vtype_value != VTYPE_BOOL && vtype_value != VTYPE_INT && vtype_value != VTYPE_UINT) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                    "can't store '%q'", vtype_to_qstr(vtype_value));
+                    MP_ERROR_TEXT("can't store '%q'"), vtype_to_qstr(vtype_value));
             }
             switch (vtype_base) {
                 case VTYPE_PTR8: {
@@ -1870,7 +1871,7 @@ STATIC void emit_native_store_subscr(emit_t *emit) {
                 }
                 default:
                     EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                        "can't store to '%q'", vtype_to_qstr(vtype_base));
+                        MP_ERROR_TEXT("can't store to '%q'"), vtype_to_qstr(vtype_base));
             }
         }
 
@@ -1992,7 +1993,7 @@ STATIC void emit_native_jump_helper(emit_t *emit, bool cond, mp_uint_t label, bo
         }
         if (!(vtype == VTYPE_BOOL || vtype == VTYPE_INT || vtype == VTYPE_UINT)) {
             EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                "can't implicitly convert '%q' to 'bool'", vtype_to_qstr(vtype));
+                MP_ERROR_TEXT("can't implicitly convert '%q' to 'bool'"), vtype_to_qstr(vtype));
         }
     }
     // For non-pop need to save the vtype so that emit_native_adjust_stack_size
@@ -2058,7 +2059,7 @@ STATIC void emit_native_unwind_jump(emit_t *emit, mp_uint_t label, mp_uint_t exc
             ASM_MOV_REG_PCREL(emit->as, REG_RET, label & ~MP_EMIT_BREAK_FROM_FOR);
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_HANDLER_UNWIND(emit), REG_RET);
             // Cancel any active exception (see also emit_native_pop_except_jump)
-            emit_native_mov_reg_const(emit, REG_RET, MP_F_CONST_NONE_OBJ);
+            ASM_MOV_REG_IMM(emit->as, REG_RET, (mp_uint_t)MP_OBJ_NULL);
             ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_VAL(emit), REG_RET);
             // Jump to the innermost active finally
             label = first_finally->label;
@@ -2153,9 +2154,8 @@ STATIC void emit_native_with_cleanup(emit_t *emit, mp_uint_t label) {
 
     ASM_MOV_REG_LOCAL(emit->as, REG_ARG_1, LOCAL_IDX_EXC_VAL(emit)); // get exc
 
-    // Check if exc is None and jump to non-exc handler if it is
-    emit_native_mov_reg_const(emit, REG_ARG_2, MP_F_CONST_NONE_OBJ);
-    ASM_JUMP_IF_REG_EQ(emit->as, REG_ARG_1, REG_ARG_2, *emit->label_slot + 2);
+    // Check if exc is MP_OBJ_NULL (i.e. zero) and jump to non-exc handler if it is
+    ASM_JUMP_IF_REG_ZERO(emit->as, REG_ARG_1, *emit->label_slot + 2, false);
 
     ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_2, REG_ARG_1, 0); // get type(exc)
     emit_post_push_reg(emit, VTYPE_PYOBJ, REG_ARG_2); // push type(exc)
@@ -2175,9 +2175,9 @@ STATIC void emit_native_with_cleanup(emit_t *emit, mp_uint_t label) {
     emit_call(emit, MP_F_OBJ_IS_TRUE);
     ASM_JUMP_IF_REG_ZERO(emit->as, REG_RET, *emit->label_slot + 1, true);
 
-    // Replace exception with None
+    // Replace exception with MP_OBJ_NULL.
     emit_native_label_assign(emit, *emit->label_slot);
-    emit_native_mov_reg_const(emit, REG_TEMP0, MP_F_CONST_NONE_OBJ);
+    ASM_MOV_REG_IMM(emit->as, REG_TEMP0, (mp_uint_t)MP_OBJ_NULL);
     ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_VAL(emit), REG_TEMP0);
 
     // end of with cleanup nlr_catch block
@@ -2255,7 +2255,7 @@ STATIC void emit_native_for_iter_end(emit_t *emit) {
 STATIC void emit_native_pop_except_jump(emit_t *emit, mp_uint_t label, bool within_exc_handler) {
     if (within_exc_handler) {
         // Cancel any active exception so subsequent handlers don't see it
-        emit_native_mov_reg_const(emit, REG_TEMP0, MP_F_CONST_NONE_OBJ);
+        ASM_MOV_REG_IMM(emit->as, REG_TEMP0, (mp_uint_t)MP_OBJ_NULL);
         ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_VAL(emit), REG_TEMP0);
     } else {
         emit_native_leave_exc_stack(emit, false);
@@ -2272,7 +2272,7 @@ STATIC void emit_native_unary_op(emit_t *emit, mp_unary_op_t op) {
     } else {
         adjust_stack(emit, 1);
         EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-            "unary op %q not implemented", mp_unary_op_method_name[op]);
+            MP_ERROR_TEXT("unary op %q not implemented"), mp_unary_op_method_name[op]);
     }
 }
 
@@ -2280,7 +2280,8 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
     DEBUG_printf("binary_op(" UINT_FMT ")\n", op);
     vtype_kind_t vtype_lhs = peek_vtype(emit, 1);
     vtype_kind_t vtype_rhs = peek_vtype(emit, 0);
-    if (vtype_lhs == VTYPE_INT && vtype_rhs == VTYPE_INT) {
+    if ((vtype_lhs == VTYPE_INT || vtype_lhs == VTYPE_UINT)
+        && (vtype_rhs == VTYPE_INT || vtype_rhs == VTYPE_UINT)) {
         // for integers, inplace and normal ops are equivalent, so use just normal ops
         if (MP_BINARY_OP_INPLACE_OR <= op && op <= MP_BINARY_OP_INPLACE_POWER) {
             op += MP_BINARY_OP_OR - MP_BINARY_OP_INPLACE_OR;
@@ -2297,9 +2298,13 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
             if (op == MP_BINARY_OP_LSHIFT) {
                 ASM_LSL_REG(emit->as, REG_RET);
             } else {
-                ASM_ASR_REG(emit->as, REG_RET);
+                if (vtype_lhs == VTYPE_UINT) {
+                    ASM_LSR_REG(emit->as, REG_RET);
+                } else {
+                    ASM_ASR_REG(emit->as, REG_RET);
+                }
             }
-            emit_post_push_reg(emit, VTYPE_INT, REG_RET);
+            emit_post_push_reg(emit, vtype_lhs, REG_RET);
             return;
         }
         #endif
@@ -2307,6 +2312,10 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
         // special cases for floor-divide and module because we dispatch to helper functions
         if (op == MP_BINARY_OP_FLOOR_DIVIDE || op == MP_BINARY_OP_MODULO) {
             emit_pre_pop_reg_reg(emit, &vtype_rhs, REG_ARG_2, &vtype_lhs, REG_ARG_1);
+            if (vtype_lhs != VTYPE_INT) {
+                EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
+                    MP_ERROR_TEXT("div/mod not implemented for uint"), mp_binary_op_method_name[op]);
+            }
             if (op == MP_BINARY_OP_FLOOR_DIVIDE) {
                 emit_call(emit, MP_F_SMALL_INT_FLOOR_DIVIDE);
             } else {
@@ -2319,33 +2328,41 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
         int reg_rhs = REG_ARG_3;
         emit_pre_pop_reg_flexible(emit, &vtype_rhs, &reg_rhs, REG_RET, REG_ARG_2);
         emit_pre_pop_reg(emit, &vtype_lhs, REG_ARG_2);
+
         #if !(N_X64 || N_X86)
-        if (op == MP_BINARY_OP_LSHIFT) {
-            ASM_LSL_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
-        } else if (op == MP_BINARY_OP_RSHIFT) {
-            ASM_ASR_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
-        } else
+        if (op == MP_BINARY_OP_LSHIFT || op == MP_BINARY_OP_RSHIFT) {
+            if (op == MP_BINARY_OP_LSHIFT) {
+                ASM_LSL_REG_REG(emit->as, REG_ARG_2, reg_rhs);
+            } else {
+                if (vtype_lhs == VTYPE_UINT) {
+                    ASM_LSR_REG_REG(emit->as, REG_ARG_2, reg_rhs);
+                } else {
+                    ASM_ASR_REG_REG(emit->as, REG_ARG_2, reg_rhs);
+                }
+            }
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
+            return;
+        }
         #endif
+
         if (op == MP_BINARY_OP_OR) {
             ASM_OR_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (op == MP_BINARY_OP_XOR) {
             ASM_XOR_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (op == MP_BINARY_OP_AND) {
             ASM_AND_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (op == MP_BINARY_OP_ADD) {
             ASM_ADD_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (op == MP_BINARY_OP_SUBTRACT) {
             ASM_SUB_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (op == MP_BINARY_OP_MULTIPLY) {
             ASM_MUL_REG_REG(emit->as, REG_ARG_2, reg_rhs);
-            emit_post_push_reg(emit, VTYPE_INT, REG_ARG_2);
+            emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
         } else if (MP_BINARY_OP_LESS <= op && op <= MP_BINARY_OP_NOT_EQUAL) {
             // comparison ops are (in enum order):
             //  MP_BINARY_OP_LESS
@@ -2354,11 +2371,26 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
             //  MP_BINARY_OP_LESS_EQUAL
             //  MP_BINARY_OP_MORE_EQUAL
             //  MP_BINARY_OP_NOT_EQUAL
+
+            if (vtype_lhs != vtype_rhs) {
+                EMIT_NATIVE_VIPER_TYPE_ERROR(emit, MP_ERROR_TEXT("comparison of int and uint"));
+            }
+
+            size_t op_idx = op - MP_BINARY_OP_LESS + (vtype_lhs == VTYPE_UINT ? 0 : 6);
+
             need_reg_single(emit, REG_RET, 0);
             #if N_X64
             asm_x64_xor_r64_r64(emit->as, REG_RET, REG_RET);
             asm_x64_cmp_r64_with_r64(emit->as, reg_rhs, REG_ARG_2);
-            static byte ops[6] = {
+            static byte ops[6 + 6] = {
+                // unsigned
+                ASM_X64_CC_JB,
+                ASM_X64_CC_JA,
+                ASM_X64_CC_JE,
+                ASM_X64_CC_JBE,
+                ASM_X64_CC_JAE,
+                ASM_X64_CC_JNE,
+                // signed
                 ASM_X64_CC_JL,
                 ASM_X64_CC_JG,
                 ASM_X64_CC_JE,
@@ -2366,11 +2398,19 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
                 ASM_X64_CC_JGE,
                 ASM_X64_CC_JNE,
             };
-            asm_x64_setcc_r8(emit->as, ops[op - MP_BINARY_OP_LESS], REG_RET);
+            asm_x64_setcc_r8(emit->as, ops[op_idx], REG_RET);
             #elif N_X86
             asm_x86_xor_r32_r32(emit->as, REG_RET, REG_RET);
             asm_x86_cmp_r32_with_r32(emit->as, reg_rhs, REG_ARG_2);
-            static byte ops[6] = {
+            static byte ops[6 + 6] = {
+                // unsigned
+                ASM_X86_CC_JB,
+                ASM_X86_CC_JA,
+                ASM_X86_CC_JE,
+                ASM_X86_CC_JBE,
+                ASM_X86_CC_JAE,
+                ASM_X86_CC_JNE,
+                // signed
                 ASM_X86_CC_JL,
                 ASM_X86_CC_JG,
                 ASM_X86_CC_JE,
@@ -2378,24 +2418,62 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
                 ASM_X86_CC_JGE,
                 ASM_X86_CC_JNE,
             };
-            asm_x86_setcc_r8(emit->as, ops[op - MP_BINARY_OP_LESS], REG_RET);
+            asm_x86_setcc_r8(emit->as, ops[op_idx], REG_RET);
             #elif N_THUMB
             asm_thumb_cmp_rlo_rlo(emit->as, REG_ARG_2, reg_rhs);
-            static uint16_t ops[6] = {
-                ASM_THUMB_OP_ITE_GE,
-                ASM_THUMB_OP_ITE_GT,
-                ASM_THUMB_OP_ITE_EQ,
-                ASM_THUMB_OP_ITE_GT,
-                ASM_THUMB_OP_ITE_GE,
-                ASM_THUMB_OP_ITE_EQ,
-            };
-            static byte ret[6] = { 0, 1, 1, 0, 1, 0, };
-            asm_thumb_op16(emit->as, ops[op - MP_BINARY_OP_LESS]);
-            asm_thumb_mov_rlo_i8(emit->as, REG_RET, ret[op - MP_BINARY_OP_LESS]);
-            asm_thumb_mov_rlo_i8(emit->as, REG_RET, ret[op - MP_BINARY_OP_LESS] ^ 1);
+            if (asm_thumb_allow_armv7m(emit->as)) {
+                static uint16_t ops[6 + 6] = {
+                    // unsigned
+                    ASM_THUMB_OP_ITE_CC,
+                    ASM_THUMB_OP_ITE_HI,
+                    ASM_THUMB_OP_ITE_EQ,
+                    ASM_THUMB_OP_ITE_LS,
+                    ASM_THUMB_OP_ITE_CS,
+                    ASM_THUMB_OP_ITE_NE,
+                    // signed
+                    ASM_THUMB_OP_ITE_LT,
+                    ASM_THUMB_OP_ITE_GT,
+                    ASM_THUMB_OP_ITE_EQ,
+                    ASM_THUMB_OP_ITE_LE,
+                    ASM_THUMB_OP_ITE_GE,
+                    ASM_THUMB_OP_ITE_NE,
+                };
+                asm_thumb_op16(emit->as, ops[op_idx]);
+                asm_thumb_mov_rlo_i8(emit->as, REG_RET, 1);
+                asm_thumb_mov_rlo_i8(emit->as, REG_RET, 0);
+            } else {
+                static uint16_t ops[6 + 6] = {
+                    // unsigned
+                    ASM_THUMB_CC_CC,
+                    ASM_THUMB_CC_HI,
+                    ASM_THUMB_CC_EQ,
+                    ASM_THUMB_CC_LS,
+                    ASM_THUMB_CC_CS,
+                    ASM_THUMB_CC_NE,
+                    // signed
+                    ASM_THUMB_CC_LT,
+                    ASM_THUMB_CC_GT,
+                    ASM_THUMB_CC_EQ,
+                    ASM_THUMB_CC_LE,
+                    ASM_THUMB_CC_GE,
+                    ASM_THUMB_CC_NE,
+                };
+                asm_thumb_bcc_rel9(emit->as, ops[op_idx], 6);
+                asm_thumb_mov_rlo_i8(emit->as, REG_RET, 0);
+                asm_thumb_b_rel12(emit->as, 4);
+                asm_thumb_mov_rlo_i8(emit->as, REG_RET, 1);
+            }
             #elif N_ARM
             asm_arm_cmp_reg_reg(emit->as, REG_ARG_2, reg_rhs);
-            static uint ccs[6] = {
+            static uint ccs[6 + 6] = {
+                // unsigned
+                ASM_ARM_CC_CC,
+                ASM_ARM_CC_HI,
+                ASM_ARM_CC_EQ,
+                ASM_ARM_CC_LS,
+                ASM_ARM_CC_CS,
+                ASM_ARM_CC_NE,
+                // signed
                 ASM_ARM_CC_LT,
                 ASM_ARM_CC_GT,
                 ASM_ARM_CC_EQ,
@@ -2403,9 +2481,17 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
                 ASM_ARM_CC_GE,
                 ASM_ARM_CC_NE,
             };
-            asm_arm_setcc_reg(emit->as, REG_RET, ccs[op - MP_BINARY_OP_LESS]);
+            asm_arm_setcc_reg(emit->as, REG_RET, ccs[op_idx]);
             #elif N_XTENSA || N_XTENSAWIN
-            static uint8_t ccs[6] = {
+            static uint8_t ccs[6 + 6] = {
+                // unsigned
+                ASM_XTENSA_CC_LTU,
+                0x80 | ASM_XTENSA_CC_LTU, // for GTU we'll swap args
+                ASM_XTENSA_CC_EQ,
+                0x80 | ASM_XTENSA_CC_GEU, // for LEU we'll swap args
+                ASM_XTENSA_CC_GEU,
+                ASM_XTENSA_CC_NE,
+                // signed
                 ASM_XTENSA_CC_LT,
                 0x80 | ASM_XTENSA_CC_LT, // for GT we'll swap args
                 ASM_XTENSA_CC_EQ,
@@ -2413,21 +2499,21 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
                 ASM_XTENSA_CC_GE,
                 ASM_XTENSA_CC_NE,
             };
-            uint8_t cc = ccs[op - MP_BINARY_OP_LESS];
+            uint8_t cc = ccs[op_idx];
             if ((cc & 0x80) == 0) {
                 asm_xtensa_setcc_reg_reg_reg(emit->as, cc, REG_RET, REG_ARG_2, reg_rhs);
             } else {
                 asm_xtensa_setcc_reg_reg_reg(emit->as, cc & ~0x80, REG_RET, reg_rhs, REG_ARG_2);
             }
             #else
-                #error not implemented
+            #error not implemented
             #endif
             emit_post_push_reg(emit, VTYPE_BOOL, REG_RET);
         } else {
             // TODO other ops not yet implemented
             adjust_stack(emit, 1);
             EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                "binary op %q not implemented", mp_binary_op_method_name[op]);
+                MP_ERROR_TEXT("binary op %q not implemented"), mp_binary_op_method_name[op]);
         }
     } else if (vtype_lhs == VTYPE_PYOBJ && vtype_rhs == VTYPE_PYOBJ) {
         emit_pre_pop_reg_reg(emit, &vtype_rhs, REG_ARG_3, &vtype_lhs, REG_ARG_2);
@@ -2448,7 +2534,7 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
     } else {
         adjust_stack(emit, -1);
         EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-            "can't do binary op between '%q' and '%q'",
+            MP_ERROR_TEXT("can't do binary op between '%q' and '%q'"),
             vtype_to_qstr(vtype_lhs), vtype_to_qstr(vtype_rhs));
     }
 }
@@ -2560,33 +2646,46 @@ STATIC void emit_native_unpack_ex(emit_t *emit, mp_uint_t n_left, mp_uint_t n_ri
 STATIC void emit_native_make_function(emit_t *emit, scope_t *scope, mp_uint_t n_pos_defaults, mp_uint_t n_kw_defaults) {
     // call runtime, with type info for args, or don't support dict/default params, or only support Python objects for them
     emit_native_pre(emit);
+    emit_native_mov_reg_state(emit, REG_ARG_2, LOCAL_IDX_FUN_OBJ(emit));
+    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_2, REG_ARG_2, OFFSETOF_OBJ_FUN_BC_CONTEXT);
     if (n_pos_defaults == 0 && n_kw_defaults == 0) {
         need_reg_all(emit);
-        ASM_MOV_REG_IMM(emit->as, REG_ARG_2, (mp_uint_t)MP_OBJ_NULL);
-        ASM_MOV_REG_IMM(emit->as, REG_ARG_3, (mp_uint_t)MP_OBJ_NULL);
+        ASM_MOV_REG_IMM(emit->as, REG_ARG_3, 0);
     } else {
-        vtype_kind_t vtype_def_tuple, vtype_def_dict;
-        emit_pre_pop_reg_reg(emit, &vtype_def_dict, REG_ARG_3, &vtype_def_tuple, REG_ARG_2);
-        assert(vtype_def_tuple == VTYPE_PYOBJ);
-        assert(vtype_def_dict == VTYPE_PYOBJ);
+        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, 2);
         need_reg_all(emit);
     }
-    emit_load_reg_with_raw_code(emit, REG_ARG_1, scope->raw_code);
+    emit_load_reg_with_child(emit, REG_ARG_1, scope->raw_code);
     ASM_CALL_IND(emit->as, MP_F_MAKE_FUNCTION_FROM_RAW_CODE);
     emit_post_push_reg(emit, VTYPE_PYOBJ, REG_RET);
 }
 
 STATIC void emit_native_make_closure(emit_t *emit, scope_t *scope, mp_uint_t n_closed_over, mp_uint_t n_pos_defaults, mp_uint_t n_kw_defaults) {
+    // make function
     emit_native_pre(emit);
+    emit_native_mov_reg_state(emit, REG_ARG_2, LOCAL_IDX_FUN_OBJ(emit));
+    ASM_LOAD_REG_REG_OFFSET(emit->as, REG_ARG_2, REG_ARG_2, OFFSETOF_OBJ_FUN_BC_CONTEXT);
     if (n_pos_defaults == 0 && n_kw_defaults == 0) {
-        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_closed_over);
-        ASM_MOV_REG_IMM(emit->as, REG_ARG_2, n_closed_over);
+        need_reg_all(emit);
+        ASM_MOV_REG_IMM(emit->as, REG_ARG_3, 0);
     } else {
-        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_closed_over + 2);
-        ASM_MOV_REG_IMM(emit->as, REG_ARG_2, 0x100 | n_closed_over);
+        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, 2 + n_closed_over);
+        adjust_stack(emit, 2 + n_closed_over);
+        need_reg_all(emit);
     }
-    emit_load_reg_with_raw_code(emit, REG_ARG_1, scope->raw_code);
-    ASM_CALL_IND(emit->as, MP_F_MAKE_CLOSURE_FROM_RAW_CODE);
+    emit_load_reg_with_child(emit, REG_ARG_1, scope->raw_code);
+    ASM_CALL_IND(emit->as, MP_F_MAKE_FUNCTION_FROM_RAW_CODE);
+
+    // make closure
+    #if REG_ARG_1 != REG_RET
+    ASM_MOV_REG_REG(emit->as, REG_ARG_1, REG_RET);
+    #endif
+    ASM_MOV_REG_IMM(emit->as, REG_ARG_2, n_closed_over);
+    emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_closed_over);
+    if (n_pos_defaults != 0 || n_kw_defaults != 0) {
+        adjust_stack(emit, -2);
+    }
+    ASM_CALL_IND(emit->as, MP_F_NEW_CLOSURE);
     emit_post_push_reg(emit, VTYPE_PYOBJ, REG_RET);
 }
 
@@ -2626,12 +2725,12 @@ STATIC void emit_native_call_function(emit_t *emit, mp_uint_t n_positional, mp_u
                 break;
             default:
                 // this can happen when casting a cast: int(int)
-                mp_raise_NotImplementedError("casting");
+                mp_raise_NotImplementedError(MP_ERROR_TEXT("casting"));
         }
     } else {
         assert(vtype_fun == VTYPE_PYOBJ);
         if (star_flags) {
-            emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_positional + 2 * n_keyword + 3); // pointer to args
+            emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_positional + 2 * n_keyword + 2); // pointer to args
             emit_call_with_2_imm_args(emit, MP_F_CALL_METHOD_N_KW_VAR, 0, REG_ARG_1, n_positional | (n_keyword << 8), REG_ARG_2);
             emit_post_push_reg(emit, VTYPE_PYOBJ, REG_RET);
         } else {
@@ -2647,7 +2746,7 @@ STATIC void emit_native_call_function(emit_t *emit, mp_uint_t n_positional, mp_u
 
 STATIC void emit_native_call_method(emit_t *emit, mp_uint_t n_positional, mp_uint_t n_keyword, mp_uint_t star_flags) {
     if (star_flags) {
-        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_positional + 2 * n_keyword + 4); // pointer to args
+        emit_get_stack_pointer_to_reg_for_pop(emit, REG_ARG_3, n_positional + 2 * n_keyword + 3); // pointer to args
         emit_call_with_2_imm_args(emit, MP_F_CALL_METHOD_N_KW_VAR, 1, REG_ARG_1, n_positional | (n_keyword << 8), REG_ARG_2);
         emit_post_push_reg(emit, VTYPE_PYOBJ, REG_RET);
     } else {
@@ -2690,7 +2789,7 @@ STATIC void emit_native_return_value(emit_t *emit) {
             emit_pre_pop_reg(emit, &vtype, return_vtype == VTYPE_PYOBJ ? REG_PARENT_RET : REG_ARG_1);
             if (vtype != return_vtype) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit,
-                    "return expected '%q' but got '%q'",
+                    MP_ERROR_TEXT("return expected '%q' but got '%q'"),
                     vtype_to_qstr(return_vtype), vtype_to_qstr(vtype));
             }
         }
@@ -2719,7 +2818,7 @@ STATIC void emit_native_raise_varargs(emit_t *emit, mp_uint_t n_args) {
     vtype_kind_t vtype_exc;
     emit_pre_pop_reg(emit, &vtype_exc, REG_ARG_1); // arg1 = object to raise
     if (vtype_exc != VTYPE_PYOBJ) {
-        EMIT_NATIVE_VIPER_TYPE_ERROR(emit, "must raise an object");
+        EMIT_NATIVE_VIPER_TYPE_ERROR(emit, MP_ERROR_TEXT("must raise an object"));
     }
     // TODO probably make this 1 call to the runtime (which could even call convert, native_raise(obj, type))
     emit_call(emit, MP_F_NATIVE_RAISE);
@@ -2729,7 +2828,7 @@ STATIC void emit_native_yield(emit_t *emit, int kind) {
     // Note: 1 (yield) or 3 (yield from) labels are reserved for this function, starting at *emit->label_slot
 
     if (emit->do_viper_types) {
-        mp_raise_NotImplementedError("native yield");
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("native yield"));
     }
     emit->scope->scope_flags |= MP_SCOPE_FLAG_GENERATOR;
 
@@ -2775,6 +2874,7 @@ STATIC void emit_native_yield(emit_t *emit, int kind) {
                 // Found active handler, get its PC
                 ASM_MOV_REG_PCREL(emit->as, REG_RET, e->label);
                 ASM_MOV_LOCAL_REG(emit->as, LOCAL_IDX_EXC_HANDLER_PC(emit), REG_RET);
+                break;
             }
         }
     }

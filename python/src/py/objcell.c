@@ -58,14 +58,13 @@ STATIC void cell_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t k
 STATIC const mp_obj_type_t mp_type_cell = {
     { &mp_type_type },
     .name = MP_QSTR_, // cell representation is just value in < >
-#if MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_DETAILED
+    #if MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_DETAILED
     .print = cell_print,
-#endif
+    #endif
 };
 
 mp_obj_t mp_obj_new_cell(mp_obj_t obj) {
-    mp_obj_cell_t *o = m_new_obj(mp_obj_cell_t);
-    o->base.type = &mp_type_cell;
+    mp_obj_cell_t *o = mp_obj_malloc(mp_obj_cell_t, &mp_type_cell);
     o->obj = obj;
     return MP_OBJ_FROM_PTR(o);
 }

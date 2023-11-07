@@ -3,6 +3,7 @@
 #include <escher/palette.h>
 #include <ion/unicode/utf8_helper.h>
 #include <python/port/port.h>
+#include "../global_preferences.h"
 
 extern "C" {
 #include "py/nlr.h"
@@ -23,7 +24,20 @@ constexpr KDColor BackgroundColor = Palette::CodeBackground;
 constexpr KDColor HighlightColor = Palette::CodeBackgroundSelected;
 constexpr KDColor AutocompleteColor = KDColor::RGB24(0xC6C6C6); // TODO Palette change
 
+bool isItalic(mp_token_kind_t tokenKind) {
+  if (!GlobalPreferences::sharedGlobalPreferences()->syntaxhighlighting()) {
+    return false;
+  }
+  if (tokenKind == MP_TOKEN_STRING) {
+    return true;
+  }
+  return false;
+}
+
 static inline KDColor TokenColor(mp_token_kind_t tokenKind) {
+  if (!GlobalPreferences::sharedGlobalPreferences()->syntaxhighlighting()) {
+    return Palette::CodeText;
+  }
   if (tokenKind == MP_TOKEN_STRING) {
     return StringColor;
   }
@@ -65,7 +79,8 @@ static inline KDColor TokenColor(mp_token_kind_t tokenKind) {
       && MP_TOKEN_KW_TRY        + 1 == MP_TOKEN_KW_WHILE
       && MP_TOKEN_KW_WHILE      + 1 == MP_TOKEN_KW_WITH
       && MP_TOKEN_KW_WITH       + 1 == MP_TOKEN_KW_YIELD
-      && MP_TOKEN_KW_YIELD      + 1 == MP_TOKEN_OP_TILDE,
+      && MP_TOKEN_KW_YIELD      + 1 == MP_TOKEN_OP_ASSIGN
+      && MP_TOKEN_OP_ASSIGN     + 1 == MP_TOKEN_OP_TILDE,
     "MP_TOKEN order changed, so Code::PythonTextArea::TokenColor might need to change too.");
   if (tokenKind >= MP_TOKEN_KW_FALSE && tokenKind <= MP_TOKEN_KW_YIELD) {
     return KeywordColor;
@@ -118,7 +133,8 @@ static inline KDColor TokenColor(mp_token_kind_t tokenKind) {
 
   if ((tokenKind >= MP_TOKEN_OP_TILDE && tokenKind <= MP_TOKEN_DEL_DBL_STAR_EQUAL)
       || tokenKind == MP_TOKEN_DEL_EQUAL
-      || tokenKind == MP_TOKEN_DEL_MINUS_MORE)
+      || tokenKind == MP_TOKEN_DEL_MINUS_MORE
+      || tokenKind == MP_TOKEN_OP_ASSIGN)
   {
     return OperatorColor;
   }
@@ -156,7 +172,7 @@ PythonTextArea::AutocompletionType PythonTextArea::autocompletionType(const char
     const char * tokenEnd;
     _mp_token_kind_t currentTokenKind = lex->tok_kind;
 
-    while (currentTokenKind != MP_TOKEN_NEWLINE && currentTokenKind != MP_TOKEN_END) {
+    while (currentTokenKind != MP_TOKEN_NEWLINE && currentTokenKind != MP_TOKEN_END && currentTokenKind != MP_TOKEN_FSTRING_RAW) {
       tokenStart = firstNonSpace + lex->tok_column - 1;
       tokenEnd = tokenStart + TokenLength(lex, tokenStart);
 
@@ -249,7 +265,8 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
         BackgroundColor,
         selectionStart,
         selectionEnd,
-        HighlightColor);
+        HighlightColor,
+        false);
   }
   if (UTF8Helper::CodePointIs(firstNonSpace, UCodePointNull)) {
     return;
@@ -265,7 +282,7 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
     const char * tokenFrom = firstNonSpace;
     size_t tokenLength = 0;
     const char * tokenEnd = firstNonSpace;
-    while (lex->tok_kind != MP_TOKEN_NEWLINE && lex->tok_kind != MP_TOKEN_END) {
+    while (lex->tok_kind != MP_TOKEN_NEWLINE && lex->tok_kind != MP_TOKEN_END && lex->tok_kind != MP_TOKEN_FSTRING_RAW) {
       tokenFrom = firstNonSpace + lex->tok_column - 1;
       if (tokenFrom != tokenEnd) {
         // We passed over white spaces, we need to color them
@@ -279,13 +296,15 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
             BackgroundColor,
             selectionStart,
             selectionEnd,
-            HighlightColor);
+            HighlightColor,
+            false);
       }
       tokenLength = TokenLength(lex, tokenFrom);
       tokenEnd = tokenFrom + tokenLength;
 
-      // If the token is being autocompleted, use DefaultColor
+      // If the token is being autocompleted, use DefaultColor/Font
       KDColor color = (tokenFrom <= autocompleteStart && autocompleteStart < tokenEnd) ? Palette::CodeText : TokenColor(lex->tok_kind);
+      bool italic = (tokenFrom <= autocompleteStart && autocompleteStart < tokenEnd) ? false : isItalic(lex->tok_kind);
 
       LOG_DRAW("Draw \"%.*s\" for token %d\n", tokenLength, tokenFrom, lex->tok_kind);
       drawStringAt(ctx, line,
@@ -296,7 +315,9 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
         BackgroundColor,
         selectionStart,
         selectionEnd,
-        HighlightColor);
+        HighlightColor,
+        italic
+      );
 
       mp_lexer_to_next(lex);
       LOG_DRAW("Pop token %d\n", lex->tok_kind);
@@ -304,6 +325,10 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
 
     tokenFrom += tokenLength;
 
+    KDColor color = CommentColor;
+    if (!GlobalPreferences::sharedGlobalPreferences()->syntaxhighlighting()) {
+      color = Palette::CodeText;
+    }
     // Even if the token is being autocompleted, use CommentColor
     if (tokenFrom < text + byteLength) {
       LOG_DRAW("Draw comment \"%.*s\" from %d\n", byteLength - (tokenFrom - text), firstNonSpace, tokenFrom);
@@ -311,11 +336,12 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
           UTF8Helper::GlyphOffsetAtCodePoint(text, tokenFrom),
           tokenFrom,
           text + byteLength - tokenFrom,
-          CommentColor,
+          color,
           BackgroundColor,
           selectionStart,
           selectionEnd,
-          HighlightColor);
+          HighlightColor,
+          true);
     }
 
     mp_lexer_free(lex);
@@ -335,7 +361,8 @@ void PythonTextArea::ContentView::drawLine(KDContext * ctx, int line, const char
         BackgroundColor,
         nullptr,
         nullptr,
-        HighlightColor);
+        HighlightColor,
+        false);
   }
 }
 
@@ -399,14 +426,14 @@ bool PythonTextArea::handleEvent(Ion::Events::Event event) {
   return result;
 }
 
-bool PythonTextArea::handleEventWithText(const char * text, bool indentation, bool forceCursorRightOfText) {
+bool PythonTextArea::handleEventWithText(const char * text, bool indentation, bool forceCursorRightOfText, bool shouldRemoveLastCharacter) {
   if (*text == 0) {
     return false;
   }
   if (m_contentView.isAutocompleting()) {
     removeAutocompletion();
   }
-  bool result = TextArea::handleEventWithText(text, indentation, forceCursorRightOfText);
+  bool result = TextArea::handleEventWithText(text, indentation, forceCursorRightOfText, shouldRemoveLastCharacter);
   addAutocompletion();
   return result;
 }
@@ -444,6 +471,11 @@ void PythonTextArea::addAutocompletion() {
 }
 
 bool PythonTextArea::addAutocompletionTextAtIndex(int nextIndex, int * currentIndexToUpdate) {
+  // If Autocomplete disable, skip this step
+  if(!GlobalPreferences::sharedGlobalPreferences()->autocomplete()) {
+    return false;
+  }
+
   // The variable box should be loaded at this point
   const char * autocompletionTokenBeginning = nullptr;
   const char * autocompletionLocation = const_cast<char *>(cursorLocation());
@@ -461,9 +493,10 @@ bool PythonTextArea::addAutocompletionTextAtIndex(int nextIndex, int * currentIn
 
   if (textToInsertLength > 0) {
     // Try to insert the text (this might fail if the buffer is full)
-    if (!m_contentView.insertTextAtLocation(textToInsert, const_cast<char *>(autocompletionLocation), textToInsertLength)) {
+    if (!m_contentView.isAbleToInsertTextAt(textToInsertLength, autocompletionLocation, false)) {
       return false;
     }
+    m_contentView.insertTextAtLocation(textToInsert, const_cast<char *>(autocompletionLocation), textToInsertLength);
     autocompletionLocation += textToInsertLength;
     m_contentView.setAutocompleting(true);
     m_contentView.setAutocompletionEnd(autocompletionLocation);
@@ -475,7 +508,8 @@ bool PythonTextArea::addAutocompletionTextAtIndex(int nextIndex, int * currentIn
   assert(strlen(parentheses) == parenthesesLength);
   /* If couldInsertText is false, we should not try to add the parentheses as
    * there was already not enough space to add the autocompletion. */
-  if (addParentheses && m_contentView.insertTextAtLocation(parentheses, const_cast<char *>(autocompletionLocation), parenthesesLength)) {
+  if (addParentheses && m_contentView.isAbleToInsertTextAt(parenthesesLength, autocompletionLocation, false)) {
+    m_contentView.insertTextAtLocation(parentheses, const_cast<char *>(autocompletionLocation), parenthesesLength);
     m_contentView.setAutocompleting(true);
     m_contentView.setAutocompletionEnd(autocompletionLocation + parenthesesLength);
     return true;

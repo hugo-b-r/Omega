@@ -12,18 +12,38 @@ include build/toolchain.$(TOOLCHAIN).mak
 include build/variants.mak
 include build/helpers.mk
 
-ifeq (${MODEL},n0110)
-  apps_list = ${EPSILON_APPS}
-else
-  ifeq (${MODEL},bootloader)
-    apps_list = ${EPSILON_APPS}
-  else
-    apps_list = $(foreach i, ${EPSILON_APPS}, $(if $(filter external, $(i)),,$(i)))
+ifeq (${MODEL}, n0100)
+  ifeq ($(filter reader,$(apps_list)),)
+  	$(warning reader app included, removing it on n0100. )
+  	EPSILON_APPS := $(filter-out reader,$(EPSILON_APPS))
   endif
+  ifneq ($(words $(EPSILON_I18N)), 1)
+  	$(warning Only use 1 language on n0100, defaulting to en. )
+  	EPSILON_I18N := en
+  endif
+  ifeq ($(INCLUDE_ULAB), 1)
+    $(warning Removing uLab on n0100. )
+    INCLUDE_ULAB := 0
+  endif
+endif
+
+ifeq ($(filter reader,$(apps_list)),)
+  HAS_READER := 1
+endif
+
+# Remove the external apps for the n0100
+ifeq (${MODEL}, n0100)
+    apps_list = $(foreach i, ${EPSILON_APPS}, $(if $(filter external, $(i)),,$(i)))
+else
+    apps_list = ${EPSILON_APPS}
 endif
 
 ifdef FORCE_EXTERNAL
   apps_list = ${EPSILON_APPS}
+endif
+
+ifeq ($(INCLUDE_ULAB), 1)
+  SFLAGS += -DINCLUDE_ULAB
 endif
 
 ifdef HOME_DISPLAY_EXTERNALS
@@ -73,6 +93,7 @@ help:
 	@echo "  make PLATFORM=simulator TARGET=web"
 	@echo "  make PLATFORM=simulator TARGET=windows"
 	@echo "  make PLATFORM=simulator TARGET=3ds"
+	@echo "  make PLATFORM=simulator TARGET=fxcg"
 
 .PHONY: doc
 doc:
@@ -86,7 +107,7 @@ print-%:
 	@echo $*\'s origin is $(origin $*)
 
 # Since we're building out-of-tree, we need to make sure the output directories
-# are created, otherwise the receipes will fail (e.g. gcc will fail to create
+# are created, otherwise the recipes will fail (e.g. gcc will fail to create
 # "output/foo/bar.o" because the directory "output/foo" doesn't exist).
 # We need to mark those directories as precious, otherwise Make will try to get
 # rid of them upon completion (and fail, since those folders won't be empty).
@@ -107,6 +128,7 @@ ifndef USE_LIBA
 endif
 ifeq ($(USE_LIBA),0)
 include liba/Makefile.bridge
+include libaxx/Makefile.bridge
 else
 SFLAGS += -ffreestanding -nostdinc -nostdlib
 include liba/Makefile
@@ -191,3 +213,13 @@ clean_run: cleanandcompile
 .PHONY: run
 run: compile
 	${MAKE} start
+
+.PHONY: translations
+translations:
+	@echo "TRANSLATIONS"
+	$(Q) ${PYTHON} build/utilities/translate.py
+
+.PHONY: translations_clean
+translations_clean:
+	@echo "TRANSLATIONS CLEAN"
+	$(Q) ${PYTHON} build/utilities/translations_clean.py

@@ -3,6 +3,13 @@
 #include <apps/i18n.h>
 #include "helpers.h"
 #include <ion/unicode/utf8_helper.h>
+#include <apps/apps_container.h>
+
+#if defined _FXCG || defined NSPIRE_NEWLIB
+extern "C" int calculator;
+extern "C" const int prizm_heap_size;
+extern "C" char prizm_heap[];
+#endif
 
 namespace Code {
 
@@ -129,6 +136,16 @@ VariableBoxController * App::variableBoxForInputEventHandler(InputEventHandler *
 }
 
 bool App::textInputDidReceiveEvent(InputEventHandler * textInput, Ion::Events::Event event) {
+  if (event == Ion::Events::XNT) {
+    int bufferSize = CodePoint::MaxCodePointCharLength + 1;
+    char buffer[bufferSize];
+    bool shouldRemoveLastCharacter = false;
+    CodePoint codePoint = AppsContainer::sharedAppsContainer()->XNT('x', &shouldRemoveLastCharacter);
+    UTF8Decoder::CodePointToChars(codePoint, buffer, bufferSize);
+    buffer[UTF8Decoder::CharSizeOfCodePoint(codePoint)] = 0;
+    textInput->handleEventWithText(const_cast<char *>(buffer), false, false, shouldRemoveLastCharacter);
+    return true;
+  }
   const char * pythonText = Helpers::PythonTextForEvent(event);
   if (pythonText != nullptr) {
     textInput->handleEventWithText(pythonText);
@@ -139,7 +156,17 @@ bool App::textInputDidReceiveEvent(InputEventHandler * textInput, Ion::Events::E
 
 void App::initPythonWithUser(const void * pythonUser) {
   if (!m_pythonUser) {
-    MicroPython::init(m_pythonHeap, m_pythonHeap + k_pythonHeapSize);
+#if defined _FXCG || defined NSPIRE_NEWLIB
+    if (calculator == 1) { // fxcg50
+      MicroPython::init( (void *) 0x8c200000, (void *)(0x8c200000+ 0x2e0000));
+    } else if (calculator >= 1 && calculator <=4 ) {
+      MicroPython::init( prizm_heap, prizm_heap+prizm_heap_size);
+    } else {
+#endif
+      MicroPython::init(m_pythonHeap, m_pythonHeap + k_pythonHeapSize);
+#if defined _FXCG || defined NSPIRE_NEWLIB
+    }
+#endif
   }
   m_pythonUser = pythonUser;
 }

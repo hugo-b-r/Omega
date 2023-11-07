@@ -6,3 +6,7 @@ epsilon.map
 .vscode
 .DS_Store
 .gradle
+.idea/
+.vs
+.cache/
+compile_commands.json

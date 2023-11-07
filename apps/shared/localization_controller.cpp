@@ -18,7 +18,7 @@ LocalizationController::ContentView::ContentView(LocalizationController * contro
   assert(k_numberOfCountryWarningLines == 2); // textMessages is not overflowed
   I18n::Message textMessages[k_numberOfCountryWarningLines] = {I18n::Message::CountryWarning1, I18n::Message::CountryWarning2};
   for (int i = 0; i < k_numberOfCountryWarningLines; i++) {
-    m_countryWarningLines[i].setBackgroundColor(Palette::BackgroundHard);
+    m_countryWarningLines[i].setBackgroundColor(Palette::BackgroundApps);
     m_countryWarningLines[i].setFont(KDFont::SmallFont);
     m_countryWarningLines[i].setAlignment(0.5f, 0.5f);
     m_countryWarningLines[i].setMessage(textMessages[i]);
@@ -191,10 +191,10 @@ bool LocalizationController::handleEvent(Ion::Events::Event event) {
 
 void LocalizationController::willDisplayCellForIndex(HighlightCell * cell, int index) {
   if (mode() == Mode::Language) {
-    static_cast<MessageTableCell *>(cell)->setMessage(I18n::LanguageNames[index]);
+    static_cast<MessageTableCell<> *>(cell)->setMessage(I18n::LanguageNames[index]);
     return;
   }
   assert(mode() == Mode::Country);
-  static_cast<MessageTableCell *>(cell)->setMessage(I18n::CountryNames[static_cast<uint8_t>(CountryAtIndex(index))]);
+  static_cast<MessageTableCell<> *>(cell)->setMessage(I18n::CountryNames[static_cast<uint8_t>(CountryAtIndex(index))]);
 }
 }

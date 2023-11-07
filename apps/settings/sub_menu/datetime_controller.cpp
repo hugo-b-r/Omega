@@ -26,11 +26,14 @@ DateTimeController::DateTimeController(Responder * parentResponder) :
 bool DateTimeController::handleEvent(Ion::Events::Event event) {
   bool clockEnabled = Ion::RTC::mode() != Ion::RTC::Mode::Disabled;
 
-  if (event == Ion::Events::OK || event == Ion::Events::EXE) {
+  if (event == Ion::Events::OK || event == Ion::Events::EXE || event == Ion::Events::Right) {
     if (selectedRow() == 0) {
       clockEnabled = !clockEnabled;
       if (clockEnabled) {
+        #ifndef _FXCG
+        // This doesn't apply on Casio calculators
         Container::activeApp()->displayWarning(I18n::Message::RTCWarning1, I18n::Message::RTCWarning2);
+        #endif
       }
       Ion::RTC::setMode(clockEnabled ? Ion::RTC::Mode::HSE : Ion::RTC::Mode::Disabled);
     }

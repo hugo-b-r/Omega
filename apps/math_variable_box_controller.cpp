@@ -98,7 +98,7 @@ int MathVariableBoxController::reusableCellCount(int type) {
 void MathVariableBoxController::willDisplayCellForIndex(HighlightCell * cell, int index) {
   if (m_currentPage == Page::RootMenu) {
     I18n::Message label = nodeLabelAtIndex(index);
-    MessageTableCell * myCell = (MessageTableCell *)cell;
+    MessageTableCell<> * myCell = (MessageTableCell<> *)cell;
     myCell->setMessage(label);
     myCell->reloadCell();
     return;
@@ -124,7 +124,7 @@ void MathVariableBoxController::willDisplayCellForIndex(HighlightCell * cell, in
         symbolName,
         Shared::Sequence::k_maxNameWithArgumentSize
     );
-    Expression symbolExpression = Expression::ParseAndSimplify(symbolName, AppsContainer::sharedAppsContainer()->globalContext(), Poincare::Preferences::sharedPreferences()->complexFormat(), Poincare::Preferences::sharedPreferences()->angleUnit(), GlobalPreferences::sharedGlobalPreferences()->unitFormat());
+    Expression symbolExpression = Expression::Parse(symbolName, AppsContainer::sharedAppsContainer()->globalContext());
     symbolLayout = symbolExpression.createLayout(Poincare::Preferences::sharedPreferences()->displayMode(), Poincare::Preferences::sharedPreferences()->numberOfSignificantDigits());
   }
   if (symbolLayout.isUninitialized()) {
@@ -158,7 +158,7 @@ ExpressionTableCellWithExpression * MathVariableBoxController::leafCellAtIndex(i
   return &m_leafCells[index];
 }
 
-MessageTableCellWithChevron * MathVariableBoxController::nodeCellAtIndex(int index) {
+MessageTableCellWithChevron<> * MathVariableBoxController::nodeCellAtIndex(int index) {
   assert(index >= 0 && index < k_numberOfMenuRows);
   return &m_nodeCells[index];
 }
@@ -193,7 +193,7 @@ bool MathVariableBoxController::returnToPreviousMenu() {
   return AlternateEmptyNestedMenuController::returnToPreviousMenu();
 }
 
-bool MathVariableBoxController::selectLeaf(int selectedRow) {
+bool MathVariableBoxController::selectLeaf(int selectedRow, bool quitToolbox) {
   if (isDisplayingEmptyController()) {
     /* We do not want to handle OK/EXE events in that case. */
     return false;

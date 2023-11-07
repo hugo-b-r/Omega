@@ -39,16 +39,15 @@ typedef struct _mp_obj_property_t {
 STATIC mp_obj_t property_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     enum { ARG_fget, ARG_fset, ARG_fdel, ARG_doc };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
-        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
-        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
-        { MP_QSTR_doc, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_const_none_obj)} },
+        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
+        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
+        { MP_QSTR_, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
+        { MP_QSTR_doc, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
     };
     mp_arg_val_t vals[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, args, MP_ARRAY_SIZE(allowed_args), allowed_args, vals);
 
-    mp_obj_property_t *o = m_new_obj(mp_obj_property_t);
-    o->base.type = type;
+    mp_obj_property_t *o = mp_obj_malloc(mp_obj_property_t, type);
     o->proxy[0] = vals[ARG_fget].u_obj;
     o->proxy[1] = vals[ARG_fset].u_obj;
     o->proxy[2] = vals[ARG_fdel].u_obj;
@@ -58,7 +57,7 @@ STATIC mp_obj_t property_make_new(const mp_obj_type_t *type, size_t n_args, size
 
 STATIC mp_obj_t property_getter(mp_obj_t self_in, mp_obj_t getter) {
     mp_obj_property_t *p2 = m_new_obj(mp_obj_property_t);
-    *p2 = *(mp_obj_property_t*)MP_OBJ_TO_PTR(self_in);
+    *p2 = *(mp_obj_property_t *)MP_OBJ_TO_PTR(self_in);
     p2->proxy[0] = getter;
     return MP_OBJ_FROM_PTR(p2);
 }
@@ -67,7 +66,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(property_getter_obj, property_getter);
 
 STATIC mp_obj_t property_setter(mp_obj_t self_in, mp_obj_t setter) {
     mp_obj_property_t *p2 = m_new_obj(mp_obj_property_t);
-    *p2 = *(mp_obj_property_t*)MP_OBJ_TO_PTR(self_in);
+    *p2 = *(mp_obj_property_t *)MP_OBJ_TO_PTR(self_in);
     p2->proxy[1] = setter;
     return MP_OBJ_FROM_PTR(p2);
 }
@@ -76,7 +75,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(property_setter_obj, property_setter);
 
 STATIC mp_obj_t property_deleter(mp_obj_t self_in, mp_obj_t deleter) {
     mp_obj_property_t *p2 = m_new_obj(mp_obj_property_t);
-    *p2 = *(mp_obj_property_t*)MP_OBJ_TO_PTR(self_in);
+    *p2 = *(mp_obj_property_t *)MP_OBJ_TO_PTR(self_in);
     p2->proxy[2] = deleter;
     return MP_OBJ_FROM_PTR(p2);
 }
@@ -95,7 +94,7 @@ const mp_obj_type_t mp_type_property = {
     { &mp_type_type },
     .name = MP_QSTR_property,
     .make_new = property_make_new,
-    .locals_dict = (mp_obj_dict_t*)&property_locals_dict,
+    .locals_dict = (mp_obj_dict_t *)&property_locals_dict,
 };
 
 const mp_obj_t *mp_obj_property_get(mp_obj_t self_in) {

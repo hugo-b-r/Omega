@@ -63,6 +63,10 @@ SECTIONS {
     . = ALIGN(4);
     *(.text.start)
     *(.text.abort)
+    *(.text.hard_fault_handler)
+    *(.text.mem_fault_handler)
+    *(.text.usage_fault_handler)
+    *(.text.bus_fault_handler)
     *(.text.isr_systick)
     *(.text.__assert)
     *(.text.memcpy)

@@ -30,7 +30,7 @@ const ToolboxMessageTree calculChildren[] = {
 
 const ToolboxMessageTree complexChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::AbsCommandWithArg,I18n::Message::ComplexAbsoluteValue),
-  ToolboxMessageTree::Leaf(I18n::Message::ArgCommandWithArg, I18n::Message::Agument),
+  ToolboxMessageTree::Leaf(I18n::Message::ArgCommandWithArg, I18n::Message::Argument),
   ToolboxMessageTree::Leaf(I18n::Message::ReCommandWithArg, I18n::Message::RealPart),
   ToolboxMessageTree::Leaf(I18n::Message::ImCommandWithArg, I18n::Message::ImaginaryPart),
   ToolboxMessageTree::Leaf(I18n::Message::ConjCommandWithArg, I18n::Message::Conjugate)
@@ -67,13 +67,10 @@ const ToolboxMessageTree arithmeticChildren[] = {
 };
 
 const ToolboxMessageTree matricesChildren[] = {
-  ToolboxMessageTree::Leaf(I18n::Message::MatrixCommandWithArg, I18n::Message::NewMatrix, false, I18n::Message::MatrixCommand),
-  ToolboxMessageTree::Leaf(I18n::Message::IndentityCommandWithArg, I18n::Message::Identity),
-  ToolboxMessageTree::Leaf(I18n::Message::InverseCommandWithArg, I18n::Message::Inverse),
   ToolboxMessageTree::Leaf(I18n::Message::DeterminantCommandWithArg, I18n::Message::Determinant),
-  ToolboxMessageTree::Leaf(I18n::Message::TransposeCommandWithArg, I18n::Message::Transpose),
+  ToolboxMessageTree::Leaf(I18n::Message::InverseCommandWithArg, I18n::Message::Inverse),
+  ToolboxMessageTree::Leaf(I18n::Message::IndentityCommandWithArg, I18n::Message::Identity),
   ToolboxMessageTree::Leaf(I18n::Message::TraceCommandWithArg, I18n::Message::Trace),
-  ToolboxMessageTree::Leaf(I18n::Message::DimensionCommandWithArg, I18n::Message::Dimension),
   ToolboxMessageTree::Leaf(I18n::Message::RowEchelonFormCommandWithArg, I18n::Message::RowEchelonForm),
   ToolboxMessageTree::Leaf(I18n::Message::ReducedRowEchelonFormCommandWithArg, I18n::Message::ReducedRowEchelonForm)
 };
@@ -82,6 +79,14 @@ const ToolboxMessageTree vectorsChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::DotCommandWithArg, I18n::Message::Dot),
   ToolboxMessageTree::Leaf(I18n::Message::CrossCommandWithArg, I18n::Message::Cross),
   ToolboxMessageTree::Leaf(I18n::Message::NormVectorCommandWithArg, I18n::Message::NormVector),
+};
+
+const ToolboxMessageTree matricesAndVectorsChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::MatrixCommandWithArg, I18n::Message::NewMatrix, false, I18n::Message::MatrixCommand),
+  ToolboxMessageTree::Leaf(I18n::Message::TransposeCommandWithArg, I18n::Message::Transpose),
+  ToolboxMessageTree::Leaf(I18n::Message::DimensionCommandWithArg, I18n::Message::Dimension),
+  ToolboxMessageTree::Node(I18n::Message::Matrices, matricesChildren),
+  ToolboxMessageTree::Node(I18n::Message::Vectors, vectorsChildren)
 };
 
 #if LIST_ARE_DEFINED
@@ -252,7 +257,7 @@ const ToolboxMessageTree unitEnergyElectronVoltChildren[] = {
 };
 const ToolboxMessageTree unitEnergyChildren[] = {
   ToolboxMessageTree::Node(I18n::Message::UnitEnergyJouleMenu, unitEnergyJouleChildren),
-  ToolboxMessageTree::Node(I18n::Message::UnitEnergyEletronVoltMenu, unitEnergyElectronVoltChildren)};
+  ToolboxMessageTree::Node(I18n::Message::UnitEnergyElectronVoltMenu, unitEnergyElectronVoltChildren)};
 
 const ToolboxMessageTree unitPowerWattChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::UnitPowerWattMicroSymbol, I18n::Message::UnitPowerWattMicro),
@@ -711,6 +716,54 @@ const ToolboxMessageTree Electromagnetism[] = {
 
 };
 
+const ToolboxMessageTree Resistivity[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::Silver, I18n::Message::Rstvt_Silver, false, I18n::Message::Rstvt_Silver),
+  ToolboxMessageTree::Leaf(I18n::Message::Copper, I18n::Message::Rstvt_Copper, false, I18n::Message::Rstvt_Copper),
+  ToolboxMessageTree::Leaf(I18n::Message::Gold, I18n::Message::Rstvt_Gold, false, I18n::Message::Rstvt_Gold),
+  ToolboxMessageTree::Leaf(I18n::Message::Aluminium, I18n::Message::Rstvt_Aluminium, false, I18n::Message::Rstvt_Aluminium),
+  ToolboxMessageTree::Leaf(I18n::Message::Calcium, I18n::Message::Rstvt_Calcium, false, I18n::Message::Rstvt_Calcium),
+  ToolboxMessageTree::Leaf(I18n::Message::Tungsten, I18n::Message::Rstvt_Tungsten, false, I18n::Message::Rstvt_Tungsten),
+  ToolboxMessageTree::Leaf(I18n::Message::Zinc, I18n::Message::Rstvt_Zinc, false, I18n::Message::Rstvt_Zinc),
+  ToolboxMessageTree::Leaf(I18n::Message::Cobalt, I18n::Message::Rstvt_Cobalt, false, I18n::Message::Rstvt_Cobalt),
+  ToolboxMessageTree::Leaf(I18n::Message::Nickel, I18n::Message::Rstvt_Nickel, false, I18n::Message::Rstvt_Nickel),
+  ToolboxMessageTree::Leaf(I18n::Message::Lithium, I18n::Message::Rstvt_Lithium, false, I18n::Message::Rstvt_Lithium),
+  ToolboxMessageTree::Leaf(I18n::Message::Iron, I18n::Message::Rstvt_Iron, false, I18n::Message::Rstvt_Iron),
+  ToolboxMessageTree::Leaf(I18n::Message::Platinum, I18n::Message::Rstvt_Platinum, false, I18n::Message::Rstvt_Platinum),
+  ToolboxMessageTree::Leaf(I18n::Message::Tin, I18n::Message::Rstvt_Tin, false, I18n::Message::Rstvt_Tin),
+  ToolboxMessageTree::Leaf(I18n::Message::Sea_water, I18n::Message::Rstvt_Sea_water, false, I18n::Message::Rstvt_Sea_water),
+  ToolboxMessageTree::Leaf(I18n::Message::Water, I18n::Message::Rstvt_Water, false, I18n::Message::Rstvt_Water),
+  ToolboxMessageTree::Leaf(I18n::Message::Air, I18n::Message::Rstvt_Air, false, I18n::Message::Rstvt_Air),
+  ToolboxMessageTree::Leaf(I18n::Message::Wood, I18n::Message::Rstvt_Wood, false, I18n::Message::Rstvt_Wood),
+  ToolboxMessageTree::Leaf(I18n::Message::Glass, I18n::Message::Rstvt_Glass, false, I18n::Message::Rstvt_Glass)
+};
+
+const ToolboxMessageTree Conductivity[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::Silver, I18n::Message::Cndcvt_Silver, false, I18n::Message::Cndcvt_Silver),
+  ToolboxMessageTree::Leaf(I18n::Message::Copper, I18n::Message::Cndcvt_Copper, false, I18n::Message::Cndcvt_Copper),
+  ToolboxMessageTree::Leaf(I18n::Message::Gold, I18n::Message::Cndcvt_Gold, false, I18n::Message::Cndcvt_Gold),
+  ToolboxMessageTree::Leaf(I18n::Message::Aluminium, I18n::Message::Cndcvt_Aluminium, false, I18n::Message::Cndcvt_Aluminium),
+  ToolboxMessageTree::Leaf(I18n::Message::Calcium, I18n::Message::Cndcvt_Calcium, false, I18n::Message::Cndcvt_Calcium),
+  ToolboxMessageTree::Leaf(I18n::Message::Tungsten, I18n::Message::Cndcvt_Tungsten, false, I18n::Message::Cndcvt_Tungsten),
+  ToolboxMessageTree::Leaf(I18n::Message::Zinc, I18n::Message::Cndcvt_Zinc, false, I18n::Message::Cndcvt_Zinc),
+  ToolboxMessageTree::Leaf(I18n::Message::Cobalt, I18n::Message::Cndcvt_Cobalt, false, I18n::Message::Cndcvt_Cobalt),
+  ToolboxMessageTree::Leaf(I18n::Message::Nickel, I18n::Message::Cndcvt_Nickel, false, I18n::Message::Cndcvt_Nickel),
+  ToolboxMessageTree::Leaf(I18n::Message::Lithium, I18n::Message::Cndcvt_Lithium, false, I18n::Message::Cndcvt_Lithium),
+  ToolboxMessageTree::Leaf(I18n::Message::Iron, I18n::Message::Cndcvt_Iron, false, I18n::Message::Cndcvt_Iron),
+  ToolboxMessageTree::Leaf(I18n::Message::Platinum, I18n::Message::Cndcvt_Platinum, false, I18n::Message::Cndcvt_Platinum),
+  ToolboxMessageTree::Leaf(I18n::Message::Tin, I18n::Message::Cndcvt_Tin, false, I18n::Message::Cndcvt_Tin),
+  ToolboxMessageTree::Leaf(I18n::Message::Sea_water, I18n::Message::Cndcvt_Sea_water, false, I18n::Message::Cndcvt_Sea_water),
+  ToolboxMessageTree::Leaf(I18n::Message::Water, I18n::Message::Cndcvt_Water, false, I18n::Message::Cndcvt_Water),
+  ToolboxMessageTree::Leaf(I18n::Message::Air, I18n::Message::Cndcvt_Air, false, I18n::Message::Cndcvt_Air),
+  ToolboxMessageTree::Leaf(I18n::Message::Wood, I18n::Message::Cndcvt_Wood, false, I18n::Message::Cndcvt_Wood),
+  ToolboxMessageTree::Leaf(I18n::Message::Glass, I18n::Message::Cndcvt_Glass, false, I18n::Message::Cndcvt_Glass)
+};
+
+const ToolboxMessageTree Electricity[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::ElementalChargeTag, I18n::Message::ElementalCharge, false, I18n::Message::ElementalCharge),
+  ToolboxMessageTree::Node(I18n::Message::ResistivityConstants, Resistivity),
+  ToolboxMessageTree::Node(I18n::Message::ConductivityConstants, Conductivity)
+};
+
 const ToolboxMessageTree ParticleMass[] = {
   ToolboxMessageTree::Leaf(I18n::Message::ElectronMassTag, I18n::Message::ElectronMass, false, I18n::Message::ElectronMass),
   ToolboxMessageTree::Leaf(I18n::Message::MuonMassTag, I18n::Message::MuonMass, false, I18n::Message::MuonMass),
@@ -788,6 +841,7 @@ const ToolboxMessageTree PlanckUnits[] = {
 const ToolboxMessageTree Physics[] = {
   ToolboxMessageTree::Node(I18n::Message::FundamentalConstants, FundamentalConstants),
   ToolboxMessageTree::Node(I18n::Message::Electromagnetism, Electromagnetism),
+  ToolboxMessageTree::Node(I18n::Message::Electricity, Electricity),
   ToolboxMessageTree::Node(I18n::Message::NuclearConstants, Nuclear),
   ToolboxMessageTree::Node(I18n::Message::Thermodynamics, Thermodynamics),
   ToolboxMessageTree::Node(I18n::Message::Gravitation, Gravitation),
@@ -800,20 +854,23 @@ const ToolboxMessageTree Physics[] = {
 
 
 const ToolboxMessageTree menu[] = {
+  #ifdef _FXCG
+  // There is no factorial button on the fx-CG calculators
+  ToolboxMessageTree::Leaf(I18n::Message::FactorialCommandWithArg, I18n::Message::Factorial, false, I18n::Message::FactorialCommand),
+  #endif
   ToolboxMessageTree::Leaf(I18n::Message::AbsCommandWithArg, I18n::Message::AbsoluteValue),
   ToolboxMessageTree::Leaf(I18n::Message::RootCommandWithArg, I18n::Message::NthRoot),
   ToolboxMessageTree::Leaf(I18n::Message::LogCommandWithArg, I18n::Message::BasedLogarithm),
   ToolboxMessageTree::Node(I18n::Message::Calculation, calculChildren),
   ToolboxMessageTree::Node(I18n::Message::ComplexNumber, complexChildren),
-  ToolboxMessageTree::Node(I18n::Message::Combinatorics, combinatoricsChildren),
-  ToolboxMessageTree::Node(I18n::Message::Probability, probabilityChildren),
+  ToolboxMessageTree::Node(I18n::Message::Unit, unitChildren),
   ToolboxMessageTree::Node(I18n::Message::Arithmetic, arithmeticChildren),
-  ToolboxMessageTree::Node(I18n::Message::Matrices, matricesChildren),
-  ToolboxMessageTree::Node(I18n::Message::Vectors, vectorsChildren),
+  ToolboxMessageTree::Node(I18n::Message::MatricesAndVectors, matricesAndVectorsChildren),
+  ToolboxMessageTree::Node(I18n::Message::Probability, probabilityChildren),
 #if LIST_ARE_DEFINED
   ToolboxMessageTree::Node(I18n::Message::Lists,listsChildren),
 #endif
-  ToolboxMessageTree::Node(I18n::Message::Unit, unitChildren),
+  ToolboxMessageTree::Node(I18n::Message::Combinatorics, combinatoricsChildren),
   ToolboxMessageTree::Node(I18n::Message::RandomAndApproximation, randomAndApproximationChildren),
   ToolboxMessageTree::Node(I18n::Message::HyperbolicTrigonometry, trigonometryChildren),
   ToolboxMessageTree::Node(I18n::Message::Fluctuation, predictionChildren),
@@ -826,9 +883,13 @@ const ToolboxMessageTree toolboxModel = ToolboxMessageTree::Node(I18n::Message::
 MathToolbox::MathToolbox() :
   Toolbox(nullptr, rootModel()->label())
 {
+  for (int i=0; i < k_maxNumberOfDisplayedRows; i++) {
+    m_leafCells[i].setMessageFont(KDFont::LargeFont);
+    m_nodeCells[i].setMessageFont(KDFont::LargeFont);
+  }
 }
 
-bool MathToolbox::selectLeaf(int selectedRow) {
+bool MathToolbox::selectLeaf(int selectedRow, bool quitToolbox) {
   ToolboxMessageTree * messageTree = (ToolboxMessageTree *)m_messageTreeModel->childAtIndex(selectedRow);
   m_selectableTableView.deselectTable();
 
@@ -851,12 +912,12 @@ const ToolboxMessageTree * MathToolbox::rootModel() const {
   return &toolboxModel;
 }
 
-MessageTableCellWithMessage * MathToolbox::leafCellAtIndex(int index) {
+MessageTableCellWithMessage<SlideableMessageTextView> * MathToolbox::leafCellAtIndex(int index) {
   assert(index >= 0 && index < k_maxNumberOfDisplayedRows);
   return &m_leafCells[index];
 }
 
-MessageTableCellWithChevron* MathToolbox::nodeCellAtIndex(int index) {
+MessageTableCellWithChevron<SlideableMessageTextView> * MathToolbox::nodeCellAtIndex(int index) {
   assert(index >= 0 && index < k_maxNumberOfDisplayedRows);
   return &m_nodeCells[index];
 }

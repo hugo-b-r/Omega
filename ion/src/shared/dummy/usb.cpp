@@ -15,7 +15,7 @@ bool isEnumerated() {
 void clearEnumerationInterrupt() {
 }
 
-void DFU(bool) {
+void DFU(bool, void*) {
 }
 
 void enable() {
@@ -25,8 +25,4 @@ void disable() {
 }
 
 }
-}
-
-void Ion::updateSlotInfo() {
-
 }

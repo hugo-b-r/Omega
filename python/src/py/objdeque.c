@@ -57,8 +57,7 @@ STATIC mp_obj_t deque_make_new(const mp_obj_type_t *type, size_t n_args, size_t 
         mp_raise_ValueError(NULL);
     }
 
-    mp_obj_deque_t *o = m_new_obj(mp_obj_deque_t);
-    o->base.type = type;
+    mp_obj_deque_t *o = mp_obj_malloc(mp_obj_deque_t, type);
     o->alloc = maxlen + 1;
     o->i_get = o->i_put = 0;
     o->items = m_new0(mp_obj_t, o->alloc);
@@ -102,7 +101,7 @@ STATIC mp_obj_t mp_obj_deque_append(mp_obj_t self_in, mp_obj_t arg) {
     }
 
     if (self->flags & FLAG_CHECK_OVERFLOW && new_i_put == self->i_get) {
-        mp_raise_msg(&mp_type_IndexError, "full");
+        mp_raise_msg(&mp_type_IndexError, MP_ERROR_TEXT("full"));
     }
 
     self->items[self->i_put] = arg;
@@ -122,7 +121,7 @@ STATIC mp_obj_t deque_popleft(mp_obj_t self_in) {
     mp_obj_deque_t *self = MP_OBJ_TO_PTR(self_in);
 
     if (self->i_get == self->i_put) {
-        mp_raise_msg(&mp_type_IndexError, "empty");
+        mp_raise_msg(&mp_type_IndexError, MP_ERROR_TEXT("empty"));
     }
 
     mp_obj_t ret = self->items[self->i_get];
@@ -161,7 +160,7 @@ const mp_obj_type_t mp_type_deque = {
     .name = MP_QSTR_deque,
     .make_new = deque_make_new,
     .unary_op = deque_unary_op,
-    .locals_dict = (mp_obj_dict_t*)&deque_locals_dict,
+    .locals_dict = (mp_obj_dict_t *)&deque_locals_dict,
 };
 
 #endif // MICROPY_PY_COLLECTIONS_DEQUE

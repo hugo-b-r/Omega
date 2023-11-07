@@ -10,22 +10,22 @@ extern "C" {
 namespace Code {
 
 const ToolboxMessageTree forLoopChildren[] = {
-  ToolboxMessageTree::Leaf(I18n::Message::ForInRange1ArgLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange1ArgLoop),
-  ToolboxMessageTree::Leaf(I18n::Message::ForInRange2ArgsLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange2ArgsLoop),
-  ToolboxMessageTree::Leaf(I18n::Message::ForInRange3ArgsLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange3ArgsLoop),
-  ToolboxMessageTree::Leaf(I18n::Message::ForInListLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInListLoop)
+  ToolboxMessageTree::Leaf(I18n::Message::ForInRange1ArgLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange1ArgLoop, true, 2),
+  ToolboxMessageTree::Leaf(I18n::Message::ForInRange2ArgsLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange2ArgsLoop, true, 2),
+  ToolboxMessageTree::Leaf(I18n::Message::ForInRange3ArgsLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInRange3ArgsLoop, true, 2),
+  ToolboxMessageTree::Leaf(I18n::Message::ForInListLoopWithArg, I18n::Message::Default, false, I18n::Message::ForInListLoop, true, 2)
 };
 
 const ToolboxMessageTree ifStatementChildren[] = {
-  ToolboxMessageTree::Leaf(I18n::Message::IfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfElseStatement),
-  ToolboxMessageTree::Leaf(I18n::Message::IfThenStatementWithArg, I18n::Message::Default, false, I18n::Message::IfThenStatement),
-  ToolboxMessageTree::Leaf(I18n::Message::IfElifElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfElifElseStatement),
-  ToolboxMessageTree::Leaf(I18n::Message::IfAndIfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfAndIfElseStatement),
-  ToolboxMessageTree::Leaf(I18n::Message::IfOrIfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfOrIfElseStatement)
+  ToolboxMessageTree::Leaf(I18n::Message::IfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfElseStatement, true, 4),
+  ToolboxMessageTree::Leaf(I18n::Message::IfThenStatementWithArg, I18n::Message::Default, false, I18n::Message::IfThenStatement, true, 2),
+  ToolboxMessageTree::Leaf(I18n::Message::IfElifElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfElifElseStatement, true, 6),
+  ToolboxMessageTree::Leaf(I18n::Message::IfAndIfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfAndIfElseStatement, true, 4),
+  ToolboxMessageTree::Leaf(I18n::Message::IfOrIfElseStatementWithArg, I18n::Message::Default, false, I18n::Message::IfOrIfElseStatement, true, 4)
 };
 
 const ToolboxMessageTree whileLoopChildren[] = {
-  ToolboxMessageTree::Leaf(I18n::Message::WhileLoopWithArg, I18n::Message::Default, false, I18n::Message::WhileLoop)
+  ToolboxMessageTree::Leaf(I18n::Message::WhileLoopWithArg, I18n::Message::Default, false, I18n::Message::WhileLoop, true, 2)
 };
 
 const ToolboxMessageTree conditionsChildren[] = {
@@ -75,6 +75,7 @@ const ToolboxMessageTree MathModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandAtan2, I18n::Message::PythonAtan2),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandCeil, I18n::Message::PythonCeil),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandCopySign, I18n::Message::PythonCopySign),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFactorial, I18n::Message::PythonFactorial),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFabs, I18n::Message::PythonFabs),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFloor, I18n::Message::PythonFloor),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFmod, I18n::Message::PythonFmod),
@@ -135,6 +136,184 @@ const ToolboxMessageTree MatplotlibPyplotModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandColorGray, I18n::Message::PythonColorGray, false)
 };
 
+#if defined(INCLUDE_ULAB)
+
+const ToolboxMessageTree NumpyNdarrayModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArray),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArange),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyConcatenate),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDiag),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyZeros),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyOnes),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyEmpty),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyEye),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFull),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLinspace),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLogspace),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFromBuffer),  
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCopy, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyCopyWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDtype, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyDtypeWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFlat, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyFlatWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFlatten, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyFlattenWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyShape, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyShapeWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyReshape, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyReshapeWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySize, I18n::Message::Default, false, I18n::Message::PythonCommandNumpySizeWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyTranspose, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyTransposeWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySort, I18n::Message::Default, false, I18n::Message::PythonCommandNumpySortWithoutArg),  
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyToBytes, I18n::Message::Default, false, I18n::Message::PythonCommandNumpyToBytesWithoutArg)
+};
+
+const ToolboxMessageTree NumpyFunctionsModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyNdinfo),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAll),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAny),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArgmax),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArgmin),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArgsort),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyClip),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyConvolve),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDiff),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyInterp),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDot),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCross),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyEqual),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyNot_equal),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFlip),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyIsfinite),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyIsinf),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMean),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMin),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMax),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMedian),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMinimum),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyMaximum),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyPolyfit),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyPolyval),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyRoll),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySortWithArguments),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyStd),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySum),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyTrace),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyTrapz),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyWhere),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyVectorize),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAcos),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAcosh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyArctan2),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAround),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAsin),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAsinh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAtan),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyAtanh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCeil),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCos),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCosh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDegrees),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyExp),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyExpm1),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFloor),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLog),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLog10),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLog2),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyRadians),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySin),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySinh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySqrt),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyTan),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyTanh),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyBool),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFloat),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyUint8),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyInt8),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyUint16),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyInt16),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyNan),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyInf),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyE),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyPi),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpySetPrintOptions),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyGetPrintOptions)
+};
+
+const ToolboxMessageTree NumpyFftModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFftFunction, I18n::Message::PythonNumpyFftFunction, false, I18n::Message::PythonCommandNumpyFftFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFft),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyIfft)
+};
+
+const ToolboxMessageTree NumpyLinalgModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyLinalgFunction, I18n::Message::PythonNumpyLinalgFunction, false, I18n::Message::PythonCommandNumpyLinalgFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyDet),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyEig),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyCholesky),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyInv),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyNorm)
+};
+
+const ToolboxMessageTree NumpyModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromNumpy, I18n::Message::PythonImportNumpy, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandNumpyFunction, I18n::Message::PythonNumpyFunction, false, I18n::Message::PythonCommandNumpyFunctionWithoutArg),
+  ToolboxMessageTree::Node(I18n::Message::NumpyNdarray, NumpyNdarrayModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::Functions, NumpyFunctionsModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::NumpyFftModule, NumpyFftModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::NumpyLinalgModule, NumpyLinalgModuleChildren)
+};
+
+const ToolboxMessageTree ScipyLinalgModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyLinalgFunction, I18n::Message::PythonScipyLinalgFunction, false, I18n::Message::PythonCommandScipyLinalgFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyLinalgChoSolve),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyLinalgSolveTriangular)
+};
+
+const ToolboxMessageTree ScipyOptimizeModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyOptimizeFunction, I18n::Message::PythonScipyOptimizeFunction, false, I18n::Message::PythonCommandScipyOptimizeFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyOptimizeBisect),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyOptimizeFmin),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyOptimizeNewton)
+};
+
+const ToolboxMessageTree ScipySignalModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySignalFunction, I18n::Message::PythonScipySignalFunction, false, I18n::Message::PythonCommandScipySignalFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySignalSosfilt),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySignalSpectrogram)
+};
+
+const ToolboxMessageTree ScipySpecialModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySpecialFunction, I18n::Message::PythonScipySpecialFunction, false, I18n::Message::PythonCommandScipySpecialFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySpecialErf),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySpecialErfc),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySpecialGamma),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipySpecialGammaln),
+};
+
+const ToolboxMessageTree ScipyModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromScipy, I18n::Message::PythonImportScipy, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandScipyFunction, I18n::Message::PythonScipyFunction, false, I18n::Message::PythonCommandScipyFunctionWithoutArg),
+  ToolboxMessageTree::Node(I18n::Message::ScipyLinalgModule, ScipyLinalgModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::ScipyOptimizeModule, ScipyOptimizeModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::ScipySignalModule, ScipySignalModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::ScipySpecialModule, ScipySpecialModuleChildren),
+};
+
+const ToolboxMessageTree UtilsModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromUtils, I18n::Message::PythonImportUtils, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsFunction, I18n::Message::PythonUtilsFunction, false, I18n::Message::PythonCommandUtilsFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsSpectrogram),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsFromInt16Buffer),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsFromUint16Buffer),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsFromInt32Buffer),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandUtilsFromUint32Buffer),
+};
+
+const ToolboxMessageTree UlabModuleChildren[] = {
+  ToolboxMessageTree::Node(I18n::Message::NumpyModule, NumpyModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::ScipyModule, ScipyModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::UtilsModule, UtilsModuleChildren),
+  ToolboxMessageTree::Leaf(I18n::Message::UlabDocumentation, I18n::Message::UlabDocumentationLink)
+};
+
+#endif
+
 const ToolboxMessageTree TurtleModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportTurtle, I18n::Message::PythonImportTurtle, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromTurtle, I18n::Message::PythonImportTurtle, false),
@@ -194,7 +373,60 @@ const ToolboxMessageTree KandinskyModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandColor, I18n::Message::PythonColor),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawString, I18n::Message::PythonDrawString),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawLine, I18n::Message::PythonDrawLine),
-  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillRect, I18n::Message::PythonFillRect)
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawCircle, I18n::Message::PythonDrawCircle),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillRect, I18n::Message::PythonFillRect),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillCircle, I18n::Message::PythonFillCircle),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillPolygon, I18n::Message::PythonFillPolygon),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandGetPalette, I18n::Message::PythonGetPalette)
+};
+
+const ToolboxMessageTree IonKeyModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyLeft, I18n::Message::PythonKeyLeft, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyUp, I18n::Message::PythonKeyUp, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyDown, I18n::Message::PythonKeyDown, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyRight, I18n::Message::PythonKeyRight, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyOk, I18n::Message::PythonKeyOk, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyBack, I18n::Message::PythonKeyBack, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyHome, I18n::Message::PythonKeyHome, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyOnOff, I18n::Message::PythonKeyOnOff, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyShift, I18n::Message::PythonKeyShift, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyAlpha, I18n::Message::PythonKeyAlpha, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyXnt, I18n::Message::PythonKeyXnt, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyVar, I18n::Message::PythonKeyVar, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyToolbox, I18n::Message::PythonKeyToolbox, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyBackspace, I18n::Message::PythonKeyBackspace, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyExp, I18n::Message::PythonKeyExp, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyLn, I18n::Message::PythonKeyLn, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyLog, I18n::Message::PythonKeyLog, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyImaginary, I18n::Message::PythonKeyImaginary, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyComma, I18n::Message::PythonKeyComma, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyPower, I18n::Message::PythonKeyPower, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeySine, I18n::Message::PythonKeySine, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyCosine, I18n::Message::PythonKeyCosine, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyTangent, I18n::Message::PythonKeyTangent, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyPi, I18n::Message::PythonKeyPi, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeySqrt, I18n::Message::PythonKeySqrt, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeySquare, I18n::Message::PythonKeySquare, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeySeven, I18n::Message::PythonKeySeven, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyEight, I18n::Message::PythonKeyEight, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyNine, I18n::Message::PythonKeyNine, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyLeftParenthesis, I18n::Message::PythonKeyLeftParenthesis, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyRightParenthesis, I18n::Message::PythonKeyRightParenthesis, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyFour, I18n::Message::PythonKeyFour, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyFive, I18n::Message::PythonKeyFive, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeySix, I18n::Message::PythonKeySix, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyMultiplication, I18n::Message::PythonKeyMultiplication, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyDivision, I18n::Message::PythonKeyDivision, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyOne, I18n::Message::PythonKeyOne, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyTwo, I18n::Message::PythonKeyTwo, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyThree, I18n::Message::PythonKeyThree, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyPlus, I18n::Message::PythonKeyPlus, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyMinus, I18n::Message::PythonKeyMinus, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyZero, I18n::Message::PythonKeyZero, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyDot, I18n::Message::PythonKeyDot, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyEe, I18n::Message::PythonKeyEe, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyAns, I18n::Message::PythonKeyAns, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKeyExe, I18n::Message::PythonKeyExe, false)
 };
 
 const ToolboxMessageTree IonModuleChildren[] = {
@@ -202,15 +434,29 @@ const ToolboxMessageTree IonModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromIon, I18n::Message::PythonImportIon, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandIonFunction, I18n::Message::PythonIonFunction, false, I18n::Message::PythonCommandIonFunctionWithoutArg),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandIsKeyDown, I18n::Message::PythonIsKeyDown),
-  ToolboxMessageTree::Leaf(I18n::Message::IonSelector, I18n::Message::IonSelector)
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandGetKeys, I18n::Message::PythonGetKeys),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandBattery, I18n::Message::PythonBattery),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandBatteryLevel, I18n::Message::PythonBatteryLevel),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandBatteryIscharging, I18n::Message::PythonBatteryIscharging),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSetBrightness, I18n::Message::PythonSetBrightness),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandGetBrightness, I18n::Message::PythonGetBrightness),
+  // This is a special case, because it is handled separately, so the sub-tree is unused.
+  ToolboxMessageTree::Node(I18n::Message::IonSelector, IonKeyModuleChildren),
+  ToolboxMessageTree::Node(I18n::Message::IonKeyList, IonKeyModuleChildren)
 };
 
 const ToolboxMessageTree TimeModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportTime, I18n::Message::PythonImportTime, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromTime, I18n::Message::PythonImportTime, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandTimeFunction, I18n::Message::PythonTimeFunction, false, I18n::Message::PythonCommandTimeFunctionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandTime, I18n::Message::PythonTime),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandMonotonic, I18n::Message::PythonMonotonic, false),
-  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSleep, I18n::Message::PythonSleep)
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSleep, I18n::Message::PythonSleep),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandLocalTime, I18n::Message::PythonLocalTime),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandMktime, I18n::Message::PythonMktime),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSetLocaltime, I18n::Message::PythonSetLocaltime),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandRTCmode, I18n::Message::PythonRTCmode),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSetRTCmode, I18n::Message::PythonSetRTCmode),
 };
 
 const ToolboxMessageTree OsModuleChildren[] = {
@@ -223,20 +469,49 @@ const ToolboxMessageTree OsModuleChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonOsCommandListdir, I18n::Message::PythonOsListdir, false)
 };
 
+#if MICROPY_PY_SYS
+const ToolboxMessageTree SysModuleChildren[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportSys, I18n::Message::PythonImportSys, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandImportFromSys, I18n::Message::PythonImportSys, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandExit, I18n::Message::PythonSysExit, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandPrintexception, I18n::Message::PythonSysPrintexception, false, I18n::Message::PythonSysCommandPrintexceptionWithoutArg),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandByteorder, I18n::Message::PythonSysByteorder, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandImplementation, I18n::Message::PythonSysImplementation, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandModules, I18n::Message::PythonSysModules, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandVersion, I18n::Message::PythonSysVersion, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonSysCommandVersioninfo, I18n::Message::PythonSysVersioninfo, false)
+};
+#endif
+
 const ToolboxMessageTree modulesChildren[] = {
   ToolboxMessageTree::Node(I18n::Message::MathModule, MathModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::CmathModule, CMathModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::MatplotlibPyplotModule, MatplotlibPyplotModuleChildren),
+#if defined(INCLUDE_ULAB)
+  ToolboxMessageTree::Node(I18n::Message::UlabModule, UlabModuleChildren),
+#endif
   ToolboxMessageTree::Node(I18n::Message::TurtleModule, TurtleModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::RandomModule, RandomModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::KandinskyModule, KandinskyModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::IonModule, IonModuleChildren),
   ToolboxMessageTree::Node(I18n::Message::OsModule, OsModuleChildren),
+#if MICROPY_PY_SYS
+  ToolboxMessageTree::Node(I18n::Message::SysModule, SysModuleChildren),
+#endif
   ToolboxMessageTree::Node(I18n::Message::TimeModule, TimeModuleChildren)
 };
 
 const ToolboxMessageTree catalogChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandPound, I18n::Message::PythonPound, false),
+  #ifdef _FXCG
+  // There is no question mark button on the fx-CG calculators
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandColon, I18n::Message::PythonColon, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandSemicon, I18n::Message::PythonSemicon, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandExclamationMark, I18n::Message::PythonExclamationMark, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandLessThan, I18n::Message::PythonLessThan, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandGreaterThan, I18n::Message::PythonGreaterThan, false),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandQuestionMark, I18n::Message::PythonQuestionMark, false),
+  #endif
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandPercent, I18n::Message::PythonPercent, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommand1J, I18n::Message::Python1J, false),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandLF, I18n::Message::PythonLF, false),
@@ -273,6 +548,7 @@ const ToolboxMessageTree catalogChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandCosh, I18n::Message::PythonCosh),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDegrees, I18n::Message::PythonDegrees),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDivMod, I18n::Message::PythonDivMod),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawCircle, I18n::Message::PythonDrawCircle),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawLine, I18n::Message::PythonDrawLine),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandDrawString, I18n::Message::PythonDrawString),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandConstantE, I18n::Message::PythonConstantE, false),
@@ -282,6 +558,8 @@ const ToolboxMessageTree catalogChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandExp, I18n::Message::PythonExp),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandExpm1, I18n::Message::PythonExpm1),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFabs, I18n::Message::PythonFabs),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillCircle, I18n::Message::PythonFillCircle),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillPolygon, I18n::Message::PythonFillPolygon),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFillRect, I18n::Message::PythonFillRect),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFloat, I18n::Message::PythonFloat),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandFloor, I18n::Message::PythonFloor),
@@ -324,6 +602,7 @@ const ToolboxMessageTree catalogChildren[] = {
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandIsNaN, I18n::Message::PythonIsNaN),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandKandinskyFunction, I18n::Message::PythonKandinskyFunction, false, I18n::Message::PythonCommandKandinskyFunctionWithoutArg),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandIsKeyDown, I18n::Message::PythonIsKeyDown),
+  ToolboxMessageTree::Leaf(I18n::Message::PythonCommandBattery, I18n::Message::PythonBattery),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandLdexp, I18n::Message::PythonLdexp),
   ToolboxMessageTree::Leaf(I18n::Message::PythonTurtleCommandLeft, I18n::Message::PythonTurtleLeft),
   ToolboxMessageTree::Leaf(I18n::Message::PythonCommandLength, I18n::Message::PythonLength),
@@ -424,10 +703,10 @@ const ToolboxMessageTree fileChildren[] {
 };
 
 const ToolboxMessageTree exceptionsChildren[] = {
-  ToolboxMessageTree::Leaf(I18n::Message::TryExcept1ErrorWithArg, I18n::Message::Default, false, I18n::Message::TryExcept1Error),
-  ToolboxMessageTree::Leaf(I18n::Message::TryExcept1ErrorElseWithArg, I18n::Message::Default, false, I18n::Message::TryExcept1ErrorElse),
-  ToolboxMessageTree::Leaf(I18n::Message::TryExcept2ErrorWithArg, I18n::Message::Default, false, I18n::Message::TryExcept2Error),
-  ToolboxMessageTree::Leaf(I18n::Message::WithInstructionWithArg, I18n::Message::Default, false, I18n::Message::WithInstruction),
+  ToolboxMessageTree::Leaf(I18n::Message::TryExcept1ErrorWithArg, I18n::Message::Default, false, I18n::Message::TryExcept1Error, true, 4),
+  ToolboxMessageTree::Leaf(I18n::Message::TryExcept1ErrorElseWithArg, I18n::Message::Default, false, I18n::Message::TryExcept1ErrorElse, true, 6),
+  ToolboxMessageTree::Leaf(I18n::Message::TryExcept2ErrorWithArg, I18n::Message::Default, false, I18n::Message::TryExcept2Error, true, 4),
+  ToolboxMessageTree::Leaf(I18n::Message::WithInstructionWithArg, I18n::Message::Default, false, I18n::Message::WithInstruction, true, 2),
 };
 
 const ToolboxMessageTree menu[] = {
@@ -445,6 +724,10 @@ const ToolboxMessageTree toolboxModel = ToolboxMessageTree::Node(I18n::Message::
 PythonToolbox::PythonToolbox() :
   Toolbox(nullptr, rootModel()->label())
 {
+  for (int i=0; i < k_maxNumberOfDisplayedRows; i++) {
+    m_leafCells[i].setMessageFont(KDFont::LargeFont);
+    m_nodeCells[i].setMessageFont(KDFont::LargeFont);
+  }
 }
 
 const ToolboxMessageTree * PythonToolbox::moduleChildren(const char * name, int * numberOfNodes) const {
@@ -475,31 +758,28 @@ bool PythonToolbox::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
+void PythonToolbox::willDisplayCellForIndex(HighlightCell * cell, int index) {
+  Toolbox::willDisplayCellForIndex(cell, index);
+  const ToolboxMessageTree * messageTree = static_cast<const ToolboxMessageTree *>(m_messageTreeModel->childAtIndex(index));
+  MessageTableCell<SlideableMessageTextView> * myCell = static_cast<MessageTableCell<SlideableMessageTextView> *>(cell);
+  myCell->setMessageFont(messageTree->isMultiLine() ? KDFont::SmallFont : KDFont::LargeFont);
+}
+
 KDCoordinate PythonToolbox::rowHeight(int j) {
-  if (typeAtLocation(0, j) == Toolbox::LeafCellType && (m_messageTreeModel->label() == I18n::Message::IfStatementMenu || m_messageTreeModel->label() == I18n::Message::Exceptions)) {
-      /* To get the exact height needed for each cell, we have to compute its
-       * text size, which means scan the text char by char to look for '\n'
-       * chars. This is very costly and ruins the speed performance when
-       * scrolling at the bottom of a long table: to compute a position on the
-       * kth row, we call cumulatedHeightFromIndex(k), which calls rowHeight k
-       * times.
-       * We thus decided to compute the real height only for the ifStatement
-       * children of the toolbox, which is the only menu that has special height
-       * rows. */
-    const ToolboxMessageTree * messageTree = static_cast<const ToolboxMessageTree *>(m_messageTreeModel->childAtIndex(j));
-    return k_font->stringSize(I18n::translate(messageTree->label())).height() + 2*Metric::TableCellVerticalMargin + (messageTree->text() == I18n::Message::Default ? 0 : Toolbox::rowHeight(j));
+  const ToolboxMessageTree * messageTree = static_cast<const ToolboxMessageTree *>(m_messageTreeModel->childAtIndex(j));
+  if (messageTree->isMultiLine()) {
+    return k_fontForMultiLine->glyphSize().height() * messageTree->numberOfLines() + 2*Metric::TableCellVerticalMargin + (messageTree->text() == I18n::Message::Default ? 0 : Toolbox::rowHeight(j));
   }
   return Toolbox::rowHeight(j);
 }
 
-bool PythonToolbox::selectLeaf(int selectedRow) {
-  m_selectableTableView.deselectTable();
+bool PythonToolbox::selectLeaf(int selectedRow, bool quitToolbox) {
   ToolboxMessageTree * node = (ToolboxMessageTree *)m_messageTreeModel->childAtIndex(selectedRow);
-  if(node->insertedText() == I18n::Message::IonSelector){
-    m_ionKeys.setSender(sender());
-    Container::activeApp()->displayModalViewController(static_cast<ViewController*>(&m_ionKeys), 0.f, 0.f, Metric::PopUpTopMargin, Metric::PopUpLeftMargin, 0, Metric::PopUpRightMargin);
+#if defined(INCLUDE_ULAB)
+  if(node->text() == I18n::Message::UlabDocumentationLink){
     return true;
   }
+#endif
   const char * editedText = I18n::translate(node->insertedText());
   // strippedEditedText array needs to be in the same scope as editedText
   char strippedEditedText[k_maxMessageSize];
@@ -510,20 +790,35 @@ bool PythonToolbox::selectLeaf(int selectedRow) {
     editedText = strippedEditedText;
   }
   sender()->handleEventWithText(editedText, true);
-  Container::activeApp()->dismissModalViewController();
+  if (quitToolbox) {
+    m_selectableTableView.deselectTable();
+    Container::activeApp()->dismissModalViewController();
+  }
   return true;
 }
+
+// This is the same function as in the Toolbox class, but we need to override it because we need to handle the Key selector differently.
+bool PythonToolbox::selectSubMenu(int selectedRow) {
+  // If the selected row is a is the Key selector, we display the IonKeySelectorViewController
+  if (m_messageTreeModel->childAtIndex(selectedRow)->label() == I18n::Message::IonSelector) {
+    m_ionKeys.setSender(sender());
+    Container::activeApp()->displayModalViewController(static_cast<ViewController*>(&m_ionKeys), 0.f, 0.f, Metric::PopUpTopMargin, Metric::PopUpLeftMargin, 0, Metric::PopUpRightMargin);
+    return true;
+  }
+  return Toolbox::selectSubMenu(selectedRow);
+}
+
 
 const ToolboxMessageTree * PythonToolbox::rootModel() const {
   return &toolboxModel;
 }
 
-MessageTableCellWithMessage * PythonToolbox::leafCellAtIndex(int index) {
+MessageTableCellWithMessage<SlideableMessageTextView> * PythonToolbox::leafCellAtIndex(int index) {
   assert(index >= 0 && index < k_maxNumberOfDisplayedRows);
   return &m_leafCells[index];
 }
 
-MessageTableCellWithChevron* PythonToolbox::nodeCellAtIndex(int index) {
+MessageTableCellWithChevron<SlideableMessageTextView> * PythonToolbox::nodeCellAtIndex(int index) {
   assert(index >= 0 && index < k_maxNumberOfDisplayedRows);
   return &m_nodeCells[index];
 }

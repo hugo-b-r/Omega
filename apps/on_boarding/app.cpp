@@ -18,22 +18,14 @@ App::App(Snapshot * snapshot) :
   m_localizationController(&m_modalViewController, Metric::CommonTopMargin, LocalizationController::Mode::Language),
   m_logoController()
 {
-}
-
-int App::numberOfTimers() {
-  return firstResponder() == &m_logoController;
-}
-
-Timer * App::timerAtIndex(int i) {
-  assert(i == 0);
-  return &m_logoController;
+  AppsContainer::sharedAppsContainer()->addTimer(&m_logoController);
 }
 
 bool App::processEvent(Ion::Events::Event e) {
   if (e == Ion::Events::Home) {
     return true;
   }
-  if (e == Ion::Events::OnOff) {
+  if (e == Ion::Events::OnOff && !GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
     Ion::Power::standby(); // Force a core reset to exit
   }
   return ::App::processEvent(e);

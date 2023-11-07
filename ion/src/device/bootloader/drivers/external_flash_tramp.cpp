@@ -381,6 +381,12 @@ void EraseSector(int i) {
   asm("cpsie if");
 }
 
+void LockSlotA() {
+}
+
+void LockSlotB() {
+}
+
 }
 }
 }

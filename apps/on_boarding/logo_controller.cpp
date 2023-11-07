@@ -16,7 +16,7 @@ LogoController::LogoController() :
 }
 
 bool LogoController::fire() {
-  Container::activeApp()->dismissModalViewController();
+    Container::activeApp()->dismissModalViewController();
   return true;
 }
 
@@ -41,7 +41,6 @@ void LogoController::viewWillAppear() {
   if (!backlightInitialized) {
     Ion::Backlight::init();
   }
-  ViewController::viewWillAppear();
 }
 
 void LogoController::viewDidDisappear() {
@@ -53,6 +52,7 @@ void LogoController::viewDidDisappear() {
       AppsContainer::sharedAppsContainer()->activateExamMode(GlobalPreferences::sharedGlobalPreferences()->examMode());
     }
   }
+  AppsContainer::sharedAppsContainer()->removeTimer(this);
   ViewController::viewDidDisappear();
 }
 

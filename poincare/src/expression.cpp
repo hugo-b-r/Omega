@@ -38,10 +38,42 @@ Expression Expression::Parse(char const * string, Context * context, bool addPar
   return expression;
 }
 
-Expression Expression::ExpressionFromAddress(const void * address, size_t size) {
+  Expression Expression::ExpressionFromAddress(const void * address, size_t size, const void * record) {
   if (address == nullptr || size == 0) {
     return Expression();
   }
+#ifdef STRING_STORAGE
+  // Check that expression was stored as a string in record
+  size_t i;
+  const char * ptr=(const char *) address;
+  for (i=1;i<size && ptr[i];++i){
+    if (ptr[i]=='"')
+      break;
+  }
+  if (i < 1024 && ptr[0]=='"' && i > 0 && i < size && ptr[i] == '"') {
+    ((char *)ptr)[i] = 0;
+    Expression e = Expression::Parse(ptr + 1, nullptr);
+    ((char *)ptr)[i] = '"';
+    address = e.addressInPool();
+    size = e.size();
+    if (record) {
+      const char * name = ((const Ion::Storage::Record *)record)->fullName();
+      char repl = 0;
+      int l = strlen(name);
+      if (strncmp(name+l-4,".seq",4) == 0) {
+        repl='n';
+      } else if (strncmp(name+l-5,".func",5) == 0) {
+        repl='x';
+      }
+      if (repl){
+        e=e.replaceSymbolWithExpression(Symbol::Builder(repl),Symbol::Builder(UCodePointUnknown));
+        address= e.addressInPool();
+        size=e.size();
+      }
+    }
+    return Expression(static_cast<ExpressionNode *>(TreePool::sharedPool()->copyTreeFromAddress(address, size)));    // must be done before e is destroyed
+  }
+#endif
   // Build the Expression in the Tree Pool
   return Expression(static_cast<ExpressionNode *>(TreePool::sharedPool()->copyTreeFromAddress(address, size)));
 }
@@ -570,7 +602,7 @@ bool Expression::isReal(Context * context) const {
 
 bool Expression::isIdenticalTo(const Expression e) const {
   /* We use the simplification order only because it is a already-coded total
-   * order on expresssions. */
+   * order on expressions. */
   return ExpressionNode::SimplificationOrder(node(), e.node(), true, true) == 0;
 }
 
@@ -656,7 +688,7 @@ void Expression::beautifyAndApproximateScalar(Expression * simplifiedExpression,
     if (approximateExpression) {
       /* Step 1: Approximation
        * We compute the approximate expression from the Cartesian form to avoid
-       * unprecision. For example, if the result is the ComplexCartesian(a,b),
+       * imprecision. For example, if the result is the ComplexCartesian(a,b),
        * the final expression is going to be sqrt(a^2+b^2)*exp(i*atan(b/a)...
        * in Polar ComplexFormat. If we approximate this expression instead of
        * ComplexCartesian(a,b), we are going to loose precision on the resulting

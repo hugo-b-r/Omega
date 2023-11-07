@@ -51,7 +51,7 @@ void mp_asm_base_start_pass(mp_asm_base_t *as, int pass) {
         memset(as->label_offsets, -1, as->max_num_labels * sizeof(size_t));
     } else {
         // allocating executable RAM is platform specific
-        MP_PLAT_ALLOC_EXEC(as->code_offset, (void**)&as->code_base, &as->code_size);
+        MP_PLAT_ALLOC_EXEC(as->code_offset, (void **)&as->code_base, &as->code_size);
         assert(as->code_base != NULL);
     }
     as->pass = pass;
@@ -61,7 +61,8 @@ void mp_asm_base_start_pass(mp_asm_base_t *as, int pass) {
 // all functions must go through this one to emit bytes
 // if as->pass < MP_ASM_PASS_EMIT, then this function just counts the number
 // of bytes needed and returns NULL, and callers should not store any data
-uint8_t *mp_asm_base_get_cur_to_write_bytes(mp_asm_base_t *as, size_t num_bytes_to_write) {
+uint8_t *mp_asm_base_get_cur_to_write_bytes(void *as_in, size_t num_bytes_to_write) {
+    mp_asm_base_t *as = as_in;
     uint8_t *c = NULL;
     if (as->pass == MP_ASM_PASS_EMIT) {
         assert(as->code_offset + num_bytes_to_write <= as->code_size);
@@ -84,12 +85,12 @@ void mp_asm_base_label_assign(mp_asm_base_t *as, size_t label) {
 }
 
 // align must be a multiple of 2
-void mp_asm_base_align(mp_asm_base_t* as, unsigned int align) {
+void mp_asm_base_align(mp_asm_base_t *as, unsigned int align) {
     as->code_offset = (as->code_offset + align - 1) & (~(align - 1));
 }
 
 // this function assumes a little endian machine
-void mp_asm_base_data(mp_asm_base_t* as, unsigned int bytesize, uintptr_t val) {
+void mp_asm_base_data(mp_asm_base_t *as, unsigned int bytesize, uintptr_t val) {
     uint8_t *c = mp_asm_base_get_cur_to_write_bytes(as, bytesize);
     if (c != NULL) {
         for (unsigned int i = 0; i < bytesize; i++) {

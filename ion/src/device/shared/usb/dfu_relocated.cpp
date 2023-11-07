@@ -12,9 +12,9 @@ extern char _dfu_bootloader_flash_end;
 namespace Ion {
 namespace USB {
 
-typedef void (*PollFunctionPointer)(bool exitWithKeyboard);
+typedef void (*PollFunctionPointer)(bool exitWithKeyboard, void * data);
 
-void DFU(bool exitWithKeyboard) {
+void DFU(bool exitWithKeyboard, void * data) {
   Ion::updateSlotInfo();
 
   /* DFU transfers can serve two purposes:
@@ -59,7 +59,7 @@ void DFU(bool exitWithKeyboard) {
 
   /* 4- Disable all interrupts
    * The interrupt service routines live in the Flash and could be overwritten
-   * by garbage during a firmware upgrade opration, so we disable them. */
+   * by garbage during a firmware upgrade operation, so we disable them. */
   Device::Timing::shutdown();
 
   /* 5- Jump to DFU bootloader code. We made sure in the linker script that the
@@ -76,7 +76,7 @@ void DFU(bool exitWithKeyboard) {
    *        add-symbol-file ion/src/device/usb/dfu.elf 0x20038000
    */
 
-  dfu_bootloader_entry(exitWithKeyboard);
+  dfu_bootloader_entry(exitWithKeyboard, data);
 
   /* 5- Restore interrupts */
   Device::Timing::init();

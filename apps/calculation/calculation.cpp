@@ -8,6 +8,7 @@
 #include <poincare/undefined.h>
 #include <poincare/unit.h>
 #include <poincare/unreal.h>
+#include <poincare/symbol_abstract.h>
 #include <string.h>
 #include <cmath>
 #include <algorithm>
@@ -256,8 +257,9 @@ Calculation::AdditionalInformationType Calculation::additionalInformationType(Co
   if (o.hasUnit()) {
     Expression unit;
     PoincareHelpers::ReduceAndRemoveUnit(&o, App::app()->localContext(), ExpressionNode::ReductionTarget::User, &unit, ExpressionNode::SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined, ExpressionNode::UnitConversion::None);
-    double value = PoincareHelpers::ApproximateToScalar<double>(o, App::app()->localContext());
-    return (Unit::ShouldDisplayAdditionalOutputs(value, unit, GlobalPreferences::sharedGlobalPreferences()->unitFormat())) ? AdditionalInformationType::Unit : AdditionalInformationType::None;
+    UnitNode::Vector<int> vector = UnitNode::Vector<int>::FromBaseUnits(unit);
+    const Unit::Representative * representative = Unit::Representative::RepresentativeForDimension(vector);
+    return representative != nullptr ? AdditionalInformationType::Unit : AdditionalInformationType::None;
   }
   if (o.isBasedIntegerCappedBy(k_maximalIntegerWithAdditionalInformation)) {
     return AdditionalInformationType::Integer;
@@ -271,6 +273,9 @@ Calculation::AdditionalInformationType Calculation::additionalInformationType(Co
   }
   if (o.type() == ExpressionNode::Type::Matrix) {
     return AdditionalInformationType::Matrix;
+  }
+  if (o.polynomialDegree(context, "x") == 2) {
+    return AdditionalInformationType::SecondDegree;
   }
   return AdditionalInformationType::None;
 }

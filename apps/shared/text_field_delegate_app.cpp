@@ -72,10 +72,12 @@ bool TextFieldDelegateApp::fieldDidReceiveEvent(EditableField * field, Responder
     if (XNTCanBeOverriden()) {
       xnt = field->XNTCodePoint(xnt);
     }
+    bool shouldRemoveLastCharacter = false;
+    xnt = AppsContainer::sharedAppsContainer()->XNT(xnt, &shouldRemoveLastCharacter);
     size_t length = UTF8Decoder::CodePointToChars(xnt, buffer, bufferSize);
     assert(length < bufferSize - 1);
     buffer[length] = 0;
-    return field->handleEventWithText(buffer);
+    return field->handleEventWithText(buffer, false, false, shouldRemoveLastCharacter);
   }
   return false;
 }
@@ -85,7 +87,13 @@ bool TextFieldDelegateApp::isFinishingEvent(Ion::Events::Event event) {
 }
 
 bool TextFieldDelegateApp::isAcceptableExpression(const Expression exp) {
-  return !(exp.isUninitialized() || exp.type() == ExpressionNode::Type::Store || exp.type() == ExpressionNode::Type::Equal);
+  if (exp.isUninitialized()) {
+    return false;
+  }
+  if (exp.type() == ExpressionNode::Type::Store) {
+    return false;
+  }
+  return true;
 }
 
 bool TextFieldDelegateApp::ExpressionCanBeSerialized(const Expression expression, bool replaceAns, Expression ansExpression, Context * context) {

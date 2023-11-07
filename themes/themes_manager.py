@@ -70,7 +70,16 @@ def get_data(theme, path):
 
     return data
 
-
+def theme_to_dict(data):
+    r = {}
+    for key in data["colors"].keys():
+        if type(data["colors"][key]) is str:
+            r[key]=data["colors"][key]
+        else:
+            for sub_key in data["colors"][key].keys():
+                r[key+sub_key] = data["colors"][key][sub_key]
+    return r
+        
 def write_palette_h(data, file_p):
     """
     Write the header to file_p
@@ -115,17 +124,42 @@ def write_palette_h(data, file_p):
         "Cyan": "00ffff",
     }
 
-    for key in data["colors"].keys():
-        if type(data["colors"][key]) is str:
-            file_p.write("  constexpr static KDColor " + key + " = KDColor::RGB24(0x" + data["colors"][key] + ");\n")
-            if defaults.keys().__contains__(key):
-                del defaults[key]
-        else:
-            for sub_key in data["colors"][key].keys():
-                file_p.write("  constexpr static KDColor " + key + sub_key + " = KDColor::RGB24(0x" + data["colors"][key][sub_key] + ");\n")
-            if defaults.keys().__contains__(key+sub_key):
-                del defaults[key+sub_key]
+    # Default values - sometimes never used
+    defaults = {
+        "YellowDark": "ffb734",
+        "YellowLight": "ffcc7b",
+        "PurpleBright": "656975",
+        "PurpleDark": "414147",
+        "GrayWhite": "f5f5f5",
+        "GrayBright": "ececec",
+        "GrayMiddle": "d9d9d9",
+        "GrayDark": "a7a7a7",
+        "GrayVeryDark": "8c8c8c",
+        "Select": "d4d7e0",
+        "SelectDark": "b0b8d8",
+        "WallScreen": "f7f9fa",
+        "WallScreenDark": "e0e6ed",
+        "SubTab": "b8bbc5",
+        "LowBattery": "f30211",
+        "Red": "ff000c",
+        "RedLight": "fe6363",
+        "Magenta": "ff0588",
+        "Turquoise": "60c1ec",
+        "Pink": "ffabb6",
+        "Blue": "5075f2",
+        "BlueLight": "718fee",
+        "Orange": "fe871f",
+        "Green": "50c102",
+        "GreenLight": "52db8f",
+        "Brown": "8d7350",
+        "Purple": "6e2d79",
+        "BlueishGrey": "919ea4",
+        "Cyan": "00ffff",
+    }
 
+    # First apply a fallback theme to ensure backwards compatibility
+    defaults.update(theme_to_dict(get_data("upsilon_light",os.path.dirname(os.path.realpath(__file__)) + os.path.sep + "themes" + os.path.sep + "local")))
+    defaults.update(theme_to_dict(data))
     for key in defaults.keys():
         file_p.write("  constexpr static KDColor " + key + " = KDColor::RGB24(0x" + defaults[key] + ");\n")
 
@@ -214,7 +248,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process the themes.")
-    parser.add_argument("repo", nargs="?", help="git remote from wtich to get the themes from. Set to \"local\" for included themes")
+    parser.add_argument("repo", nargs="?", help="git remote from witch to get the themes from. Set to \"local\" for included themes")
     parser.add_argument("theme", nargs="?", help="the name of the theme")
     parser.add_argument("output", nargs="?", help="path to the output header file")
     parser.add_argument("build_dir", nargs="?", help="path to the output folder")

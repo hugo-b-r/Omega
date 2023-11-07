@@ -10,6 +10,9 @@
 #include <assert.h>
 #include <limits.h>
 #include <utility>
+#include <apps/i18n.h>
+#include <apps/global_preferences.h>
+
 
 namespace Poincare {
 
@@ -109,7 +112,7 @@ UnitNode::Vector<int> UnitNode::Vector<int>::FromBaseUnits(const Expression base
     .current            = 0,
     .temperature        = 0,
     .amountOfSubstance  = 0,
-    .luminuousIntensity = 0,
+    .luminousIntensity = 0,
   };
   int numberOfFactors;
   int factorIndex = 0;
@@ -764,7 +767,7 @@ void Unit::ChooseBestRepresentativeAndPrefixForValue(Expression units, double * 
   }
 }
 
-bool Unit::ShouldDisplayAdditionalOutputs(double value, Expression unit, Preferences::UnitFormat unitFormat) {
+bool Unit::HaveAdditionalOutputs(double value, Expression unit, Preferences::UnitFormat unitFormat) {
   if (unit.isUninitialized()) {
     return false;
   }
@@ -779,7 +782,7 @@ bool Unit::ShouldDisplayAdditionalOutputs(double value, Expression unit, Prefere
       || unit.hasExpression(isNonBase, nullptr);
 }
 
-int Unit::SetAdditionalExpressions(Expression units, double value, Expression * dest, int availableLength, ExpressionNode::ReductionContext reductionContext) {
+int Unit::SetAdditionalExpressionsAndMessage(Expression units, double value, Expression * dest, int availableLength, ExpressionNode::ReductionContext reductionContext, I18n::Message * message) {
   if (units.isUninitialized()) {
     return 0;
   }
@@ -787,7 +790,11 @@ int Unit::SetAdditionalExpressions(Expression units, double value, Expression * 
   if (!representative) {
     return 0;
   }
-  return representative->setAdditionalExpressions(value, dest, availableLength, reductionContext);
+  *message = representative->dimensionMessage();
+  if (Unit::HaveAdditionalOutputs(value, units, reductionContext.unitFormat())) {
+    return representative->setAdditionalExpressions(value, dest, availableLength, reductionContext);
+  }
+  return 0;
 }
 
 Expression Unit::BuildSplit(double value, const Unit * units, int length, ExpressionNode::ReductionContext reductionContext) {

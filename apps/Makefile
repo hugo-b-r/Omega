@@ -23,7 +23,7 @@ ifneq ($(strip $(apps_missing)),)
     $(foreach i, $(SUBMODULES_APPS), $(if $(call app_equals, $(filter $(i), $(apps_missing)), $(i)), $(eval miss_modules=1)))
 
     ifeq ($(miss_modules), 1)
-        PLS_IGNORE := $(shell >&2 printf "\nSome submodules apps seem to be missing. To download them, assumming you git clone'd the repo, do\n")
+        PLS_IGNORE := $(shell >&2 printf "\nSome submodules apps seem to be missing. To download them, assuming you git clone'd the repo, do\n")
         PLS_IGNORE := $(shell >&2 printf "  git submodule init\n")
         PLS_IGNORE := $(shell >&2 printf "  git submodule update\n\n")
     endif
@@ -50,6 +50,7 @@ apps_src += $(addprefix apps/,\
   exam_mode_configuration_official.cpp:+official \
   exam_mode_configuration_non_official.cpp:-official \
   global_preferences.cpp \
+  host_filemanager.cpp \
   i18n.py \
   lock_view.cpp \
   main.cpp \
@@ -58,7 +59,9 @@ apps_src += $(addprefix apps/,\
   math_variable_box_empty_controller.cpp \
   shift_alpha_lock_view.cpp \
   suspend_timer.cpp \
+  timer_manager.cpp \
   title_bar_view.cpp \
+  xnt_loop.cpp \
 )
 
 tests_src += $(addprefix apps/,\
@@ -81,7 +84,7 @@ $(call object_for,apps/apps_container_storage.cpp apps/apps_container.cpp apps/m
 country_preferences = apps/country_preferences.csv
 language_preferences = apps/language_preferences.csv
 
-# The header is refered to as <apps/i18n.h> so make sure it's findable this way
+# The header is referred to as <apps/i18n.h> so make sure it's findable this way
 SFLAGS += -I$(BUILD_DIR)
 
 i18n_files += $(addprefix apps/language_,$(addsuffix .universal.i18n, $(EPSILON_I18N)))
@@ -117,6 +120,7 @@ apps_tests_src = $(app_calculation_test_src) $(app_code_test_src) $(app_graph_te
 apps_tests_src += $(addprefix apps/,\
   alternate_empty_nested_menu_controller.cpp \
   global_preferences.cpp \
+  dummy_timer_manager.cpp \
 )
 
 ifeq ($(THEME_REPO),local)

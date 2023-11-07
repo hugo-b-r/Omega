@@ -13,6 +13,10 @@
 #error This file expects OMEGA_VERSION to be defined
 #endif
 
+#ifndef UPSILON_VERSION
+#error This file expects UPSILON_VERSION to be defined
+#endif
+
 namespace Ion {
 extern char staticStorageArea[];
 }
@@ -57,37 +61,54 @@ public:
     m_externalAppsRAMStart(0xFFFFFFFF),
     m_externalAppsRAMEnd(0xFFFFFFFF),
     m_footer(Magic),
-    m_ohm_header(OmegaMagic),
+    m_omegaMagicHeader(OmegaMagic),
     m_omegaVersion{OMEGA_VERSION},
 #ifdef OMEGA_USERNAME
     m_username{OMEGA_USERNAME},
 #else
     m_username{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"},
 #endif
-    m_ohm_footer(OmegaMagic) { }
+    m_omegaMagicFooter(OmegaMagic),
+    m_upsilonMagicHeader(UpsilonMagic),
+    m_UpsilonVersion{UPSILON_VERSION},
+    m_osType(OSType),
+    m_upsilonMagicFooter(UpsilonMagic) { }
 
   const char * omegaVersion() const {
     assert(m_storageAddressRAM != nullptr);
     assert(m_storageSizeRAM != 0);
     assert(m_header == Magic);
     assert(m_footer == Magic);
-    assert(m_ohm_header == OmegaMagic);
-    assert(m_ohm_footer == OmegaMagic);
+    assert(m_omegaMagicHeader == OmegaMagic);
+    assert(m_omegaMagicFooter == OmegaMagic);
     return m_omegaVersion;
+  }
+  const char * upsilonVersion() const {
+    assert(m_storageAddress != nullptr);
+    assert(m_storageSize != 0);
+    assert(m_header == Magic);
+    assert(m_footer == Magic);
+    assert(m_omegaMagicHeader == OmegaMagic);
+    assert(m_omegaMagicFooter == OmegaMagic);
+    return m_UpsilonVersion;
   }
   const volatile char * username() const volatile {
     assert(m_storageAddressRAM != nullptr);
     assert(m_storageSizeRAM != 0);
     assert(m_header == Magic);
     assert(m_footer == Magic);
-    assert(m_ohm_header == OmegaMagic);
-    assert(m_ohm_footer == OmegaMagic);
+    assert(m_omegaMagicHeader == OmegaMagic);
+    assert(m_omegaMagicFooter == OmegaMagic);
     return m_username;
   }
-
+  const void * storage_address() const {
+    return storageAddress;
+  }
 private:
   constexpr static uint32_t Magic = 0xDEC0EDFE;
   constexpr static uint32_t OmegaMagic = 0xEFBEADDE;
+  constexpr static uint32_t UpsilonMagic = 0x55707369;
+  constexpr static uint32_t OSType = 0x79827178;
   uint32_t m_header;
   const char m_expectedEpsilonVersion[8];
   void * m_storageAddressRAM;
@@ -99,10 +120,14 @@ private:
   uint32_t m_externalAppsRAMStart;
   uint32_t m_externalAppsRAMEnd;
   uint32_t m_footer;
-  uint32_t m_ohm_header;
+  uint32_t m_omegaMagicHeader;
   const char m_omegaVersion[16];
   const volatile char m_username[16];
-  uint32_t m_ohm_footer;
+  uint32_t m_omegaMagicFooter;
+  uint32_t m_upsilonMagicHeader;
+  const char m_UpsilonVersion[16];
+  uint32_t m_osType;
+  uint32_t m_upsilonMagicFooter;
 };
 
 const UserlandHeader __attribute__((section(".userland_header"), used)) k_userlandHeader;
@@ -113,7 +138,6 @@ public:
   SlotInfo() :
     m_header(Magic),
     m_footer(Magic) {}
-  
   void update() {
     m_header = Magic;
     m_kernelHeaderAddress = &k_kernelHeader;
@@ -134,6 +158,10 @@ const char * Ion::omegaVersion() {
   return k_userlandHeader.omegaVersion();
 }
 
+const char * Ion::upsilonVersion() {
+  return k_userlandHeader.upsilonVersion();
+}
+
 const volatile char * Ion::username() {
   return k_userlandHeader.username();
 }
@@ -144,6 +172,10 @@ const char * Ion::softwareVersion() {
 
 const char * Ion::patchLevel() {
   return k_kernelHeader.patchLevel();
+}
+
+const void * Ion::storageAddress() {
+  return k_userlandHeader.storage_address();
 }
 
 SlotInfo * slotInfo() {
