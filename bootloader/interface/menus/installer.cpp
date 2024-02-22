@@ -1,6 +1,7 @@
 #include "installer.h"
 #include <bootloader/interface/static/messages.h>
 #include <bootloader/usb_data.h>
+#include <escher/palette.h>
 
 #include <bootloader/interface/menus/dfu.h>
 
@@ -16,7 +17,7 @@ Bootloader::DfuMenu * Bootloader::InstallerMenu::BootloaderDFU() {
   return bootloaderDfu;
 }
 
-Bootloader::InstallerMenu::InstallerMenu() : Menu(KDColorBlack, KDColorWhite, Messages::installerTitle, Messages::mainTitle) {
+Bootloader::InstallerMenu::InstallerMenu() : Menu(Palette::PrimaryText, Palette::BackgroundHard, Messages::installerTitle, Messages::mainTitle) {
   setup();
 }
 

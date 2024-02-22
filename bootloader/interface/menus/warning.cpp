@@ -1,8 +1,9 @@
 #include "warning.h"
 #include <bootloader/slots/slot.h>
 #include <bootloader/boot.h>
+#include <escher/palette.h>
 
-Bootloader::WarningMenu::WarningMenu() : Menu(KDColorWhite, KDColorRed, Messages::epsilonWarningTitle, Messages::mainTitle, false, 3) {
+Bootloader::WarningMenu::WarningMenu() : Menu(Palette::BackgroundHard, Palette::Red, Messages::epsilonWarningTitle, Messages::mainTitle, false, 3) {
   setup();
 }
 

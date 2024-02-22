@@ -1,6 +1,7 @@
 #include "crash.h"
+#include <escher/palette.h>
 
-Bootloader::CrashMenu::CrashMenu(const char * err) : Menu(KDColorBlack, KDColorWhite, Bootloader::Messages::bootloaderCrashTitle, Bootloader::Messages::mainTitle), m_error(err) {
+Bootloader::CrashMenu::CrashMenu(const char * err) : Menu(Palette::PrimaryText, Palette::BackgroundHard, Bootloader::Messages::bootloaderCrashTitle, Bootloader::Messages::mainTitle), m_error(err) {
   setup();
 }
 

@@ -3,6 +3,7 @@
 #include <ion/timing.h>
 #include <bootloader/interface/static/interface.h>
 #include <bootloader/interface/static/messages.h>
+#include <escher/palette.h>
 
 #include <bootloader/computer.h>
 
@@ -46,7 +47,7 @@ KDCoordinate Interface::computerHeight() {
 void Interface::drawFlasher() {
   KDContext * ctx = KDIonContext::sharedContext();
 
-  ctx->fillRect(KDRect(0, 0, 320, 240), KDColorWhite);
+  ctx->fillRect(KDRect(0, 0, 320, 240), Palette::BackgroundHard);
   drawComputer(ctx, 25);
 
   KDSize fontSize = KDFont::LargeFont->glyphSize();
@@ -60,7 +61,7 @@ void Interface::drawFlasher() {
 
 void Interface::drawLoading() {
   KDContext * ctx = KDIonContext::sharedContext();
-  ctx->fillRect(KDRect(0, 0, 320, 240), KDColorWhite);
+  ctx->fillRect(KDRect(0, 0, 320, 240), Palette::BackgroundHard);
   drawComputer(ctx, 25);
   Ion::Timing::msleep(250);
   KDSize fontSize = KDFont::LargeFont->glyphSize();
@@ -68,7 +69,7 @@ void Interface::drawLoading() {
 
   for (uint8_t i = 0; i < strlen(Messages::mainTitle); i++) {
     char tmp[2] = {Messages::mainTitle[i], '\0'};
-    ctx->drawString(tmp, KDPoint(initPos + i * (fontSize.width()), ImageStore::Computer->height() + 25 + 10), KDFont::LargeFont, KDColorBlack, KDColorWhite);
+    ctx->drawString(tmp, KDPoint(initPos + i * (fontSize.width()), ImageStore::Computer->height() + 25 + 10), KDFont::LargeFont, Palette::PrimaryText, Palette::BackgroundHard);
     Ion::Timing::msleep(50);
   }
   Ion::Timing::msleep(500);

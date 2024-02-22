@@ -1,7 +1,8 @@
 #include "about.h"
 #include <bootloader/interface/static/messages.h>
+#include <escher/palette.h>
 
-Bootloader::AboutMenu::AboutMenu() : Menu(KDColorBlack, KDColorWhite, Messages::aboutMenuTitle, Messages::bootloaderVersion) {
+Bootloader::AboutMenu::AboutMenu() : Menu(Palette::PrimaryText, Palette::BackgroundHard, Messages::aboutMenuTitle, Messages::bootloaderVersion) {
   setup();
 }
 
