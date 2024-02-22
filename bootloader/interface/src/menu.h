@@ -4,11 +4,12 @@
 #include <ion/keyboard.h>
 #include <bootloader/interface/static/messages.h>
 #include <kandinsky/context.h>
+#include <escher/palette.h>
 
 namespace Bootloader {
   class Menu {
     public:
-      Menu() : Menu(KDColorBlack, KDColorWhite, Messages::mainTitle) { };
+      Menu() : Menu(Palette::PrimaryText, Palette::BackgroundHard, Messages::mainTitle) { };
       Menu(KDColor foreground, KDColor background, const char * title) : Menu(foreground, background, title,  nullptr) {};
       Menu(KDColor foreground, KDColor background, const char * title, const char * bottom) : Menu(foreground, background, title, bottom, false) {};
       Menu(KDColor foreground, KDColor background, const char * title, const char * bottom, bool centerY) :  Menu(foreground, background, title, bottom, centerY, k_columns_margin) {};

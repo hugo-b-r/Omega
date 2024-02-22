@@ -52,11 +52,11 @@ void Interface::drawFlasher() {
 
   KDSize fontSize = KDFont::LargeFont->glyphSize();
   int initPos = (320 - fontSize.width() * strlen(Messages::mainTitle)) / 2;
-  ctx->drawString(Messages::mainTitle, KDPoint(initPos, ImageStore::Computer->height() + 25 + 10), KDFont::LargeFont, KDColorBlack, KDColorWhite);
+  ctx->drawString(Messages::mainTitle, KDPoint(initPos, ImageStore::Computer->height() + 25 + 10), KDFont::LargeFont, Palette::PrimaryText, Palette::BackgroundHard);
 
   int y = ImageStore::Computer->height() + 25 + 10 + (KDFont::SmallFont->glyphSize().height() + 10);
   initPos = (320 - KDFont::SmallFont->glyphSize().width() * strlen(Messages::dfuSlotsUpdate)) / 2;
-  ctx->drawString(Messages::dfuSlotsUpdate, KDPoint(initPos, y), KDFont::SmallFont, KDColorBlack, KDColorWhite);
+  ctx->drawString(Messages::dfuSlotsUpdate, KDPoint(initPos, y), KDFont::SmallFont, Palette::PrimaryText, Palette::BackgroundHard);
 }
 
 void Interface::drawLoading() {
